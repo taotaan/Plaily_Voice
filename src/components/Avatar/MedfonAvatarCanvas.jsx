@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { TalkingHead } from "@met4citizen/talkinghead";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
+import { addLog } from "../../services/logger";
+import { LipsyncTh } from "../../modules/lipsync-th";
 
 // Ensure WASM MeshoptDecoder is loaded and patch GLTFLoader
 MeshoptDecoder.ready.then(() => {
@@ -44,36 +46,67 @@ function MedfonAvatarCanvas({ onAvatarLoaded, avatarUrl = "/avatars/medfon.glb" 
                     containerRef.current,
                     {
                         ttsEndpoint: null,
-                        cameraView: "head",
-                        avatarMute: true // ปิดเสียงออดิโอของ TalkingHead AudioWorklet ไม่ให้สร้างเสียงวี้ดค้าง
+                        cameraView: "head"
                     }
                 );
 
-                // ปิดกั้นไม่ให้ AudioContext ของ TalkingHead ส่งเสียงวี้ด AAAAA ภูมิหลัง
-                if (head.audioCtx && typeof head.audioCtx.suspend === "function") {
-                    try {
-                        head.audioCtx.suspend();
-                    } catch (e) {}
-                }
+                // Register Thai Lip-Sync Module into TalkingHead
+                const lipsyncTh = new LipsyncTh();
+                if (!head.lipsync) head.lipsync = {};
+                head.lipsync["th"] = lipsyncTh;
+                head.lipsync["th-TH"] = lipsyncTh;
 
                 headRef.current = head;
                 window.medfonHead = head;
 
+                // Load avatar model
                 await head.showAvatar({
-                    url: avatarUrl,
-                    anim: {
-                        "viseme_aa": { "Face": { "jawOpen": 1.0, "Fcl_MTH_A": 1.0 } },
-                        "viseme_E":  { "Face": { "jawOpen": 0.4, "mouthSmileLeft": 0.5, "mouthSmileRight": 0.5, "Fcl_MTH_E": 1.0 } },
-                        "viseme_I":  { "Face": { "jawOpen": 0.3, "Fcl_MTH_I": 1.0 } },
-                        "viseme_O":  { "Face": { "jawOpen": 0.6, "mouthFunnel": 0.8, "Fcl_MTH_O": 1.0 } },
-                        "viseme_U":  { "Face": { "jawOpen": 0.3, "mouthPucker": 0.9, "Fcl_MTH_U": 1.0 } }
-                    }
+                    url: avatarUrl
                 });
+
+                // Diagnostic Scan & Dynamic Viseme Mesh Mapping
+                const detectedMorphs = [];
+                const detectedMeshes = [];
+                const faceMeshNames = [];
+
+                if (head.scene) {
+                    head.scene.traverse((obj) => {
+                        if (obj.isMesh) {
+                            detectedMeshes.push(obj.name || "unnamed_mesh");
+                            if (obj.morphTargetDictionary) {
+                                const keys = Object.keys(obj.morphTargetDictionary);
+                                keys.forEach((mKey) => detectedMorphs.push(mKey));
+
+                                const hasFaceMorphs = keys.some((k) => {
+                                    const lk = k.toLowerCase();
+                                    return lk.includes("mth") || lk.includes("jaw") || lk.includes("mouth") || lk.includes("viseme");
+                                });
+
+                                if (hasFaceMorphs || (obj.name && obj.name.toLowerCase().includes("face"))) {
+                                    faceMeshNames.push(obj.name);
+                                }
+                            }
+                        }
+                    });
+                }
+
+                const uniqueMorphs = Array.from(new Set(detectedMorphs));
+                console.log("3D Model Meshes Detected:", detectedMeshes);
+                console.log("3D Model Morph Targets Detected:", detectedMorphs.length, "Unique:", uniqueMorphs.length);
+                console.log("Sample Morph Targets:", uniqueMorphs.slice(0, 50));
+                console.log("Mapped Face Meshes for Visemes:", faceMeshNames);
+
+                if (detectedMorphs.length === 0) {
+                    console.warn("⚠️ WARNING: No morph targets (BlendShapes) found in this 3D GLB model!");
+                    addLog("AVATAR", "⚠️ เตือน: ไม่พบ Morph Targets (BlendShapes) สำหรับขยับใบหน้า/ปากในโมเดล 3D นี้");
+                } else {
+                    addLog("AVATAR", `พบ ${detectedMeshes.length} Meshes และ ${uniqueMorphs.length} Morph Targets ในโมเดล 3D (${faceMeshNames.length} Face meshes)`);
+                }
 
                 if (mounted) {
                     setIsLoading(false);
                     if (onAvatarLoaded) {
-                        onAvatarLoaded(head);
+                        onAvatarLoaded(head, uniqueMorphs);
                     }
                 }
             } catch (error) {
@@ -92,7 +125,7 @@ function MedfonAvatarCanvas({ onAvatarLoaded, avatarUrl = "/avatars/medfon.glb" 
             if (headRef.current && typeof headRef.current.stop === "function") {
                 try {
                     headRef.current.stop();
-                } catch (e) {
+                } catch {
                     // Ignore cleanup errors
                 }
             }

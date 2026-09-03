@@ -152,6 +152,7 @@ body {
 /* Avatar Canvas Component */
 .avatar-canvas-wrapper {
   position: relative;
+  z-index: 1;
   width: 100%;
   flex: 1;
   border-radius: var(--radius-md);
@@ -161,8 +162,15 @@ body {
 }
 
 .avatar-canvas-container {
+  position: relative;
   width: 100%;
   height: 100%;
+}
+
+.avatar-canvas-container canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .avatar-loading-overlay, .avatar-error-overlay {
@@ -193,6 +201,9 @@ body {
 
 /* Avatar Controls Component */
 .avatar-controls-card {
+  position: relative;
+  z-index: 5;
+  pointer-events: auto;
   margin-top: 14px;
   background: rgba(15, 23, 42, 0.5);
   border-radius: var(--radius-md);
@@ -208,6 +219,8 @@ body {
 }
 
 .tab-btn {
+  position: relative;
+  z-index: 6;
   background: transparent;
   border: none;
   color: var(--text-muted);
@@ -236,6 +249,8 @@ body {
 }
 
 .ctrl-btn {
+  position: relative;
+  z-index: 6;
   padding: 6px 12px;
   border-radius: 6px;
   border: none;
@@ -265,6 +280,8 @@ body {
 }
 
 .morph-chip {
+  position: relative;
+  z-index: 6;
   background: #334155;
   color: #cbd5e1;
   border: none;

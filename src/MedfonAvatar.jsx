@@ -20,13 +20,14 @@ function MedfonAvatar() {
     ]);
     const [isSending, setIsSending] = useState(false);
 
-    const handleAvatarLoaded = (head) => {
+    const handleAvatarLoaded = (head, morphs = []) => {
         setHeadInstance(head);
-        if (head && head.mtAvatar) {
-            const keys = Object.keys(head.mtAvatar);
-            setMorphKeys(keys);
+        let keys = morphs;
+        if ((!keys || keys.length === 0) && head && head.mtAvatar) {
+            keys = Object.keys(head.mtAvatar);
         }
-        addLog("AVATAR", "3D Avatar Engine (TalkingHead) โหลดเข้าความจำสำเร็จ 100%");
+        setMorphKeys(keys);
+        addLog("AVATAR", `3D Avatar Engine (TalkingHead) โหลดสำเร็จ (พบ ${keys.length} Morph Keys)`);
     };
 
     const handleSendMessage = async (userText) => {

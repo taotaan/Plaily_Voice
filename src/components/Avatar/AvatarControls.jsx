@@ -7,12 +7,14 @@ export function playAvatarGesture(head, gestureName = "nod", mood = "happy") {
     if (!head) return;
 
     try {
-        // 1. Play emotion mood
         if (head.setMood && typeof head.setMood === "function") {
             head.setMood(mood);
         }
 
-        // 2. Play 3D gestures based on function calling key
+        if (head.audioCtx && head.audioCtx.state === "suspended") {
+            try { head.audioCtx.resume(); } catch (e) { }
+        }
+
         if (gestureName === "wave") {
             if (typeof head.speakEmoji === "function") head.speakEmoji("👋");
         } else if (gestureName === "think") {
@@ -31,7 +33,11 @@ function AvatarControls({ head, morphKeys = [] }) {
     const [activeTab, setActiveTab] = useState("camera");
 
     const setCameraView = (viewName) => {
-        if (head && typeof head.setView === "function") {
+        if (!head) return;
+        if (head.audioCtx && head.audioCtx.state === "suspended") {
+            try { head.audioCtx.resume(); } catch (e) {}
+        }
+        if (typeof head.setView === "function") {
             head.setView(viewName);
         }
     };
@@ -39,11 +45,27 @@ function AvatarControls({ head, morphKeys = [] }) {
     const triggerMorphKey = (key) => {
         if (!head) return;
         try {
-            head.setFixedValue(key, 1.0);
+            if (head.audioCtx && head.audioCtx.state === "suspended") {
+                try { head.audioCtx.resume(); } catch (e) {}
+            }
+
+            if (typeof head.setFixedValue === "function") {
+                head.setFixedValue(key, 1.0);
+            }
+
+            const lowerKey = key.toLowerCase();
             if (head.scene) {
                 head.scene.traverse((obj) => {
                     if (obj.isMesh && obj.morphTargetDictionary && obj.morphTargetInfluences) {
-                        const idx = obj.morphTargetDictionary[key];
+                        let idx = obj.morphTargetDictionary[key];
+                        if (idx === undefined) {
+                            for (const [mName, mIdx] of Object.entries(obj.morphTargetDictionary)) {
+                                if (mName.toLowerCase() === lowerKey) {
+                                    idx = mIdx;
+                                    break;
+                                }
+                            }
+                        }
                         if (idx !== undefined) {
                             obj.morphTargetInfluences[idx] = 1.0;
                         }
@@ -52,24 +74,50 @@ function AvatarControls({ head, morphKeys = [] }) {
             }
 
             setTimeout(() => {
-                head.setFixedValue(key, null);
+                if (typeof head.setFixedValue === "function") {
+                    head.setFixedValue(key, null);
+                }
                 if (head.scene) {
                     head.scene.traverse((obj) => {
                         if (obj.isMesh && obj.morphTargetDictionary && obj.morphTargetInfluences) {
-                            const idx = obj.morphTargetDictionary[key];
+                            let idx = obj.morphTargetDictionary[key];
+                            if (idx === undefined) {
+                                for (const [mName, mIdx] of Object.entries(obj.morphTargetDictionary)) {
+                                    if (mName.toLowerCase() === lowerKey) {
+                                        idx = mIdx;
+                                        break;
+                                    }
+                                }
+                            }
                             if (idx !== undefined) {
                                 obj.morphTargetInfluences[idx] = 0;
                             }
                         }
                     });
                 }
-            }, 1200);
+            }, 2000);
         } catch (e) {
             console.error("Morph test failed:", e);
         }
     };
 
-    const quickMouthKeys = ["jawOpen", "mouthSmileLeft", "mouthSmileRight", "Fcl_MTH_A", "Fcl_MTH_I", "Fcl_MTH_O", "Fcl_MTH_Large"];
+    const mouthRelatedKeys = morphKeys.filter((k) => {
+        const lk = k.toLowerCase();
+        return (
+            lk.includes("mouth") ||
+            lk.includes("jaw") ||
+            lk.includes("mth") ||
+            lk.includes("viseme") ||
+            lk.includes("v_") ||
+            lk.includes("lip") ||
+            lk.includes("smile")
+        );
+    });
+
+    const displayMouthKeys =
+        mouthRelatedKeys.length > 0
+            ? mouthRelatedKeys.slice(0, 16)
+            : ["jawOpen", "mouthSmileLeft", "mouthSmileRight", "Fcl_MTH_A", "Fcl_MTH_I", "Fcl_MTH_O", "Fcl_MTH_Large"];
 
     return (
         <div className="avatar-controls-card">
@@ -84,7 +132,7 @@ function AvatarControls({ head, morphKeys = [] }) {
                     className={`tab-btn ${activeTab === "mouth" ? "active" : ""}`}
                     onClick={() => setActiveTab("mouth")}
                 >
-                    👄 ทดสอบรูปปาก
+                    👄 ทดสอบรูปปาก ({displayMouthKeys.length})
                 </button>
                 <button
                     className={`tab-btn ${activeTab === "all" ? "active" : ""}`}
@@ -120,7 +168,7 @@ function AvatarControls({ head, morphKeys = [] }) {
 
                 {activeTab === "mouth" && (
                     <div className="btn-group">
-                        {quickMouthKeys.map((k) => (
+                        {displayMouthKeys.map((k) => (
                             <button
                                 key={k}
                                 className="ctrl-btn pink"
@@ -137,11 +185,10 @@ function AvatarControls({ head, morphKeys = [] }) {
                         {morphKeys.map((key) => (
                             <button
                                 key={key}
-                                className={`morph-chip ${
-                                    key.startsWith("viseme") || key.includes("mouth") || key.includes("MTH") || key.includes("jaw")
+                                className={`morph-chip ${key.startsWith("viseme") || key.includes("mouth") || key.includes("MTH") || key.includes("jaw")
                                         ? "highlight"
                                         : ""
-                                }`}
+                                    }`}
                                 onClick={() => triggerMorphKey(key)}
                             >
                                 {key}
