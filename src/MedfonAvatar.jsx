@@ -1,6 +1,6 @@
 import { useState } from "react";
 import MedfonAvatarCanvas from "./components/Avatar/MedfonAvatarCanvas";
-import AvatarControls, { playAvatarGesture } from "./components/Avatar/AvatarControls";
+import { playAvatarGesture } from "./components/Avatar/AvatarControls";
 import ChatBox from "./components/Chat/ChatBox";
 import ChatInput from "./components/Chat/ChatInput";
 import { sendChatMessage } from "./services/api";
@@ -9,7 +9,6 @@ import { addLog } from "./services/logger";
 
 function MedfonAvatar() {
     const [headInstance, setHeadInstance] = useState(null);
-    const [morphKeys, setMorphKeys] = useState([]);
     const [messages, setMessages] = useState([
         {
             id: 1,
@@ -26,7 +25,6 @@ function MedfonAvatar() {
         if ((!keys || keys.length === 0) && head && head.mtAvatar) {
             keys = Object.keys(head.mtAvatar);
         }
-        setMorphKeys(keys);
         addLog("AVATAR", `3D Avatar Engine (TalkingHead) โหลดสำเร็จ (พบ ${keys.length} Morph Keys)`);
     };
 
@@ -90,8 +88,6 @@ function MedfonAvatar() {
                         </div>
 
                         <MedfonAvatarCanvas onAvatarLoaded={handleAvatarLoaded} />
-
-                        <AvatarControls head={headInstance} morphKeys={morphKeys} />
                     </div>
                 </div>
 

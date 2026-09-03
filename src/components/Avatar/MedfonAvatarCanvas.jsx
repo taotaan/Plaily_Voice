@@ -1,28 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { TalkingHead } from "@met4citizen/talkinghead";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { addLog } from "../../services/logger";
-import { LipsyncTh } from "../../modules/lipsync-th";
-
-// Ensure WASM MeshoptDecoder is loaded and patch GLTFLoader
-MeshoptDecoder.ready.then(() => {
-    if (GLTFLoader && !GLTFLoader.prototype._meshoptPatched) {
-        GLTFLoader.prototype._meshoptPatched = true;
-
-        const origLoadAsync = GLTFLoader.prototype.loadAsync;
-        GLTFLoader.prototype.loadAsync = function (...args) {
-            this.setMeshoptDecoder(MeshoptDecoder);
-            return origLoadAsync.apply(this, args);
-        };
-
-        const origParse = GLTFLoader.prototype.parse;
-        GLTFLoader.prototype.parse = function (...args) {
-            this.setMeshoptDecoder(MeshoptDecoder);
-            return origParse.apply(this, args);
-        };
-    }
-});
 
 function MedfonAvatarCanvas({ onAvatarLoaded, avatarUrl = "/avatars/medfon.glb" }) {
     const containerRef = useRef(null);
@@ -40,28 +18,22 @@ function MedfonAvatarCanvas({ onAvatarLoaded, avatarUrl = "/avatars/medfon.glb" 
                 setIsLoading(true);
                 setLoadError(null);
 
-                await MeshoptDecoder.ready;
-
                 const head = new TalkingHead(
                     containerRef.current,
                     {
                         ttsEndpoint: null,
-                        cameraView: "head"
+                        cameraView: "head",
+                        lipsyncModules: ["en"]
                     }
                 );
-
-                // Register Thai Lip-Sync Module into TalkingHead
-                const lipsyncTh = new LipsyncTh();
-                if (!head.lipsync) head.lipsync = {};
-                head.lipsync["th"] = lipsyncTh;
-                head.lipsync["th-TH"] = lipsyncTh;
 
                 headRef.current = head;
                 window.medfonHead = head;
 
                 // Load avatar model
                 await head.showAvatar({
-                    url: avatarUrl
+                    url: avatarUrl,
+                    lipsyncLang: "en"
                 });
 
                 // Diagnostic Scan & Dynamic Viseme Mesh Mapping

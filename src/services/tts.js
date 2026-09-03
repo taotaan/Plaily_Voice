@@ -2,29 +2,40 @@ import { addLog } from "./logger";
 import { LipsyncTh } from "../modules/lipsync-th";
 
 const BACKEND_API_URL = "http://localhost:8000";
-const VISEME_IDS = ["aa", "E", "I", "O", "U", "PP", "SS", "TH", "DD", "FF", "kk", "nn", "RR", "CH", "sil"];
-const VISEME_MORPH_KEYS = VISEME_IDS.map((id) => `viseme_${id}`);
-const VISEME_FALLBACK_KEYS = {
-    aa: ["Fcl_MTH_A", "jawOpen"],
-    E: ["Fcl_MTH_E", "jawOpen"],
-    I: ["Fcl_MTH_I"],
-    O: ["Fcl_MTH_O", "jawOpen"],
-    U: ["Fcl_MTH_U"],
-    PP: ["mouthClose", "Fcl_MTH_Close"],
-    FF: ["mouthFunnel"],
-    TH: ["jawOpen"],
-    DD: ["Fcl_MTH_A"],
-    kk: ["Fcl_MTH_A"],
-    nn: ["Fcl_MTH_A"],
-    RR: ["Fcl_MTH_A"],
-    CH: ["Fcl_MTH_E"],
-    SS: ["Fcl_MTH_I"],
-    sil: []
+const MOUTH_KEYS = ["Fcl_MTH_A", "Fcl_MTH_E", "Fcl_MTH_I", "Fcl_MTH_O", "Fcl_MTH_U", "Fcl_MTH_Close", "Fcl_MTH_Large"];
+const THAI_VISEME_MORPHS = {
+    aa: "Fcl_MTH_A",
+    E: "Fcl_MTH_E",
+    I: "Fcl_MTH_I",
+    O: "Fcl_MTH_O",
+    U: "Fcl_MTH_U",
+    PP: "Fcl_MTH_Close",
+    FF: "Fcl_MTH_Close",
+    TH: "Fcl_MTH_A",
+    DD: "Fcl_MTH_A",
+    kk: "Fcl_MTH_A",
+    nn: "Fcl_MTH_A",
+    RR: "Fcl_MTH_A",
+    CH: "Fcl_MTH_E",
+    SS: "Fcl_MTH_I"
 };
-const MANUAL_MOUTH_MORPH_KEYS = [
-    ...VISEME_MORPH_KEYS,
-    ...new Set(Object.values(VISEME_FALLBACK_KEYS).flat())
-];
+
+function buildWordTimings(text, durationMs) {
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    const safeWords = words.length ? words : [text.trim()];
+    const weights = safeWords.map((word) => Math.max(1, Array.from(word).length));
+    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0) || 1;
+    let elapsed = 0;
+
+    return safeWords.reduce((result, word, index) => {
+        const duration = (durationMs * weights[index]) / totalWeight;
+        result.words.push(word);
+        result.wtimes.push(elapsed);
+        result.wdurations.push(duration);
+        elapsed += duration;
+        return result;
+    }, { words: [], wtimes: [], wdurations: [] });
+}
 
 let synthVoices = [];
 
@@ -41,7 +52,11 @@ if (typeof window !== "undefined" && "speechSynthesis" in window) {
 /**
  * Stop any current audio or speech synthesis
  */
-export function stopAllSpeech(head) {
+export function stopAllSpeech(head = window.medfonHead) {
+    if (head && typeof head.stopSpeaking === "function") {
+        head.stopSpeaking();
+    }
+
     if (window.currentMedfonAudio) {
         try {
             window.currentMedfonAudio.pause();
@@ -69,237 +84,87 @@ export function stopAllSpeech(head) {
             // Ignore browser speech cleanup errors.
         }
     }
-    resetMouthMorphs(head);
+    resetAvatarMouth(head);
 }
 
-function resetMouthMorphs(head) {
+function resetAvatarMouth(head) {
+    if (!head?.setFixedValue) return;
+    MOUTH_KEYS.forEach((key) => setAvatarMouthValue(head, key, 0, null));
+}
+
+function setAvatarMouthValue(head, key, value, fixedValue = value) {
     if (!head) return;
-    if (typeof head.setFixedValue === "function") {
-        const resetKeys = [
-            ...VISEME_MORPH_KEYS,
-            "jawOpen",
-            "mouthClose",
-            "mouthFunnel",
-            "mouthPucker",
-            "Fcl_MTH_A",
-            "Fcl_MTH_I",
-            "Fcl_MTH_U",
-            "Fcl_MTH_E",
-            "Fcl_MTH_O",
-            "Fcl_MTH_Close"
-        ];
-        resetKeys.forEach((key) => head.setFixedValue(key, null));
+    if (head.setFixedValue && fixedValue !== null) {
+        head.setFixedValue(key, fixedValue, 0);
+    } else if (head.setFixedValue) {
+        head.setFixedValue(key, null);
     }
-    if (head.scene) {
-        head.scene.traverse((obj) => {
-            if (obj.isMesh && obj.morphTargetDictionary && obj.morphTargetInfluences) {
-                for (const [key, idx] of Object.entries(obj.morphTargetDictionary)) {
-                    const lowerKey = key.toLowerCase();
-                    if (
-                        lowerKey.includes("jaw") ||
-                        lowerKey.includes("mth") ||
-                        lowerKey.includes("mouth") ||
-                        lowerKey.includes("viseme")
-                    ) {
-                        obj.morphTargetInfluences[idx] = 0;
-                    }
-                }
-            }
-        });
-    }
+
+    head.scene?.traverse((object) => {
+        const index = object.morphTargetDictionary?.[key];
+        if (object.isMesh && index !== undefined && object.morphTargetInfluences) {
+            object.morphTargetInfluences[index] = value;
+        }
+    });
+    head.render?.();
 }
 
-function setMorphValue(head, key, value) {
-    if (!head) return;
-    const nextValue = value || 0;
+export function testWideMouth(head) {
+    if (!head?.setFixedValue) return false;
+    const available = Boolean(head.mtAvatar?.Fcl_MTH_Large);
+    addLog("AVATAR", `ทดสอบอ้าปากกว้าง (Fcl_MTH_Large: ${available ? "พบ" : "ไม่พบ"})`);
+    if (!available) return false;
 
-    if (head.mtAvatar && head.mtAvatar[key]) {
-        Object.assign(head.mtAvatar[key], {
-            fixed: null,
-            system: null,
-            realtime: null,
-            newvalue: nextValue,
-            needsUpdate: true
-        });
-    }
-
-    if (head.scene) {
-        const lowerKey = key.toLowerCase();
-        head.scene.traverse((obj) => {
-            if (obj.isMesh && obj.morphTargetDictionary && obj.morphTargetInfluences) {
-                // 1. Direct exact match
-                const idx = obj.morphTargetDictionary[key];
-                if (idx !== undefined) {
-                    obj.morphTargetInfluences[idx] = nextValue;
-                    return;
-                }
-
-                // 2. Fallback case-insensitive or substring match
-                for (const [mName, mIdx] of Object.entries(obj.morphTargetDictionary)) {
-                    const lName = mName.toLowerCase();
-                    if (
-                        lName === lowerKey ||
-                        lName.endsWith(`_${lowerKey}`) ||
-                        lName.endsWith(`.${lowerKey}`) ||
-                        (lowerKey === "jawopen" && (lName.includes("jaw") || lName.includes("open")))
-                    ) {
-                        obj.morphTargetInfluences[mIdx] = nextValue;
-                    }
-                }
-            }
-        });
-    }
+    stopAllSpeech(head);
+    setAvatarMouthValue(head, "Fcl_MTH_Large", 1, 1);
+    window.currentWideMouthTimeout = window.setTimeout(() => {
+        setAvatarMouthValue(head, "Fcl_MTH_Large", 0, null);
+        window.currentWideMouthTimeout = null;
+    }, 2500);
+    return true;
 }
 
-function applyMouthPose(head, activeViseme, amount) {
-    if (!head) return;
-
-    MANUAL_MOUTH_MORPH_KEYS.forEach((key) => setMorphValue(head, key, 0));
-
-    const activeKey = `viseme_${activeViseme}`;
-    if (activeViseme && activeViseme !== "sil") {
-        setMorphValue(head, activeKey, amount);
-        (VISEME_FALLBACK_KEYS[activeViseme] || []).forEach((key) => {
-            const fallbackAmount = key === "jawOpen" ? amount * 0.55 : amount * 0.75;
-            setMorphValue(head, key, fallbackAmount);
-        });
-    }
-}
-
-function startManualVisemeSync(head, visData, durationMs) {
-    if (!head || !visData || !visData.visemes.length) return;
+function startAvatarMouthAnimation(head, text, durationMs) {
+    if (!head?.setFixedValue) return;
 
     if (window.currentMedfonAnimationFrame) {
         cancelAnimationFrame(window.currentMedfonAnimationFrame);
-        window.currentMedfonAnimationFrame = null;
     }
 
+    const thaiVisemes = new LipsyncTh().wordsToVisemes(text);
+    const visemes = thaiVisemes.visemes.length
+        ? thaiVisemes.visemes.map((viseme, index) => ({
+            key: THAI_VISEME_MORPHS[viseme],
+            start: (thaiVisemes.times[index] / Math.max(1, thaiVisemes.times.at(-1) + thaiVisemes.durations.at(-1))) * durationMs,
+            duration: (thaiVisemes.durations[index] / Math.max(1, thaiVisemes.times.at(-1) + thaiVisemes.durations.at(-1))) * durationMs
+        }))
+        : [];
     const startedAt = performance.now();
-    const leadMs = 35;
 
     const animate = () => {
         const elapsed = performance.now() - startedAt;
-
-        if (elapsed >= durationMs + 120) {
-            resetMouthMorphs(head);
+        if (elapsed >= durationMs) {
+            resetAvatarMouth(head);
             window.currentMedfonAnimationFrame = null;
             return;
         }
 
-        let activeViseme = "sil";
-        let amount = 0;
-
-        for (let i = 0; i < visData.visemes.length; i++) {
-            const start = Math.max(0, visData.times[i] - leadMs);
-            const duration = Math.max(1, visData.durations[i]);
-            const end = start + duration + leadMs;
-
-            if (elapsed >= start && elapsed <= end) {
-                const progress = Math.min(1, Math.max(0, (elapsed - start) / duration));
-                activeViseme = visData.visemes[i];
-                amount = activeViseme === "sil" ? 0 : 0.25 + 0.65 * Math.sin(progress * Math.PI);
-                break;
-            }
+        let activeKey = null;
+        let progress = 0;
+        const active = visemes.find((item) => elapsed >= item.start && elapsed < item.start + item.duration);
+        if (active) {
+            activeKey = active.key;
+            progress = Math.sin(((elapsed - active.start) / Math.max(1, active.duration)) * Math.PI);
+        } else {
+            activeKey = MOUTH_KEYS[Math.floor(elapsed / 140) % (MOUTH_KEYS.length - 1)];
+            progress = 0.35 + Math.abs(Math.sin(elapsed / 110)) * 0.35;
         }
 
-        applyMouthPose(head, activeViseme, amount);
+        MOUTH_KEYS.forEach((key) => setAvatarMouthValue(head, key, key === activeKey ? progress : 0));
         window.currentMedfonAnimationFrame = requestAnimationFrame(animate);
     };
 
     window.currentMedfonAnimationFrame = requestAnimationFrame(animate);
-}
-
-function startRhythmicMouthAnimation(head, shouldContinue) {
-    if (!head) return;
-
-    const startedAt = performance.now();
-    const animate = () => {
-        if (!shouldContinue()) {
-            resetMouthMorphs(head);
-            window.currentMedfonAnimationFrame = null;
-            return;
-        }
-
-        const elapsed = (performance.now() - startedAt) / 1000;
-        const amount = 0.2 + 0.7 * Math.abs(Math.sin(elapsed * 14) * Math.cos(elapsed * 6));
-        applyMouthPose(head, "aa", amount);
-        window.currentMedfonAnimationFrame = requestAnimationFrame(animate);
-    };
-
-    window.currentMedfonAnimationFrame = requestAnimationFrame(animate);
-}
-
-function buildVisemeDataForText(text, durationMs) {
-    const timing = pathummaWordTimings(text, durationMs);
-    const lipsyncThProcessor = new LipsyncTh();
-    const visData = { visemes: [], times: [], durations: [] };
-
-    timing.words.forEach((word, i) => {
-        const parsedWord = lipsyncThProcessor.preProcessText(word);
-        const wordVisemes = lipsyncThProcessor.wordsToVisemes(parsedWord);
-        if (!wordVisemes.visemes.length) return;
-
-        const wordStart = timing.wtimes[i];
-        const wordDuration = timing.wdurations[i];
-        const wordVisemeDuration = wordVisemes.times[wordVisemes.times.length - 1] + wordVisemes.durations[wordVisemes.durations.length - 1];
-        const scale = wordVisemeDuration > 0 ? wordDuration / wordVisemeDuration : 1;
-
-        wordVisemes.visemes.forEach((viseme, j) => {
-            visData.visemes.push(viseme);
-            visData.times.push(wordStart + wordVisemes.times[j] * scale);
-            visData.durations.push(wordVisemes.durations[j] * scale);
-        });
-    });
-
-    return {
-        timing,
-        visData
-    };
-}
-
-function playHtmlAudioWithMouthFallback(head, audioSrc, fullText) {
-    const audio = new Audio(audioSrc);
-    window.currentMedfonAudio = audio;
-
-    audio.onloadedmetadata = () => {
-        if (!head) return;
-        const durationMs = Number.isFinite(audio.duration) ? audio.duration * 1000 : 3500;
-        const { visData } = buildVisemeDataForText(fullText, durationMs);
-        startManualVisemeSync(head, visData, durationMs);
-    };
-
-    audio.onplay = () => {
-        if (!head || window.currentMedfonAnimationFrame) return;
-        startRhythmicMouthAnimation(head, () => !audio.paused && !audio.ended);
-    };
-
-    audio.onended = audio.onerror = () => {
-        resetMouthMorphs(head);
-    };
-
-    audio.play();
-}
-
-if (typeof window !== "undefined") {
-    window.medfonDebugMouth = () => {
-        const head = window.medfonHead;
-        if (!head) {
-            console.warn("medfonHead is not ready yet.");
-            return;
-        }
-
-        let i = 0;
-        const sequence = ["aa", "E", "I", "O", "U", "PP", "sil"];
-        const timer = setInterval(() => {
-            const viseme = sequence[i % sequence.length];
-            applyMouthPose(head, viseme, viseme === "sil" ? 0 : 0.9);
-            i++;
-            if (i > sequence.length * 3) {
-                clearInterval(timer);
-                resetMouthMorphs(head);
-            }
-        }, 220);
-    };
 }
 
 export async function speakTextWithAvatar(head, text, voice = "ped", lang = "th-TH", onTextUpdate = null) {
@@ -335,35 +200,6 @@ export async function speakTextWithAvatar(head, text, voice = "ped", lang = "th-
     speakWithWebSpeechFallback(head, cleanText, lang, onTextUpdate);
 }
 
-function pathummaWordTimings(text, durationMs) {
-    let words;
-    try {
-        const segmenter = new Intl.Segmenter("th", { granularity: "word" });
-        words = [...segmenter.segment(text)]
-            .filter((x) => x.isWordLike || x.segment.trim().length)
-            .map((x) => x.segment.trim())
-            .filter(Boolean);
-    } catch {
-        words = text.trim().split(/\s+/).filter(Boolean);
-    }
-    if (!words.length) words = [text.trim()];
-
-    const weights = words.map((x) => Math.max(1, [...x].length));
-    const total = weights.reduce((a, b) => a + b, 0) || 1;
-    let t = 0;
-    return words.reduce(
-        (o, word, i) => {
-            const d = (durationMs * weights[i]) / total;
-            o.words.push(word);
-            o.wtimes.push(t);
-            o.wdurations.push(d);
-            t += d;
-            return o;
-        },
-        { words: [], wtimes: [], wdurations: [] }
-    );
-}
-
 /**
  * Play Audio cleanly using TalkingHead native speakAudio engine, Sync Visemes automatically, and stream text word-by-word
  */
@@ -390,27 +226,26 @@ async function playCleanAudio(head, audioSrc, fullText, onTextUpdate) {
             audioDurationSec = audioBuffer.duration;
 
             const durationMs = audioDurationSec * 1000;
-            const { timing, visData } = buildVisemeDataForText(fullText, durationMs);
 
-            addLog("AVATAR", `เริ่มเล่นเสียงและขยับปากภาษาไทย (Visemes: ${visData.visemes.length}) ความยาว: ${audioDurationSec.toFixed(1)} วินาที`);
+            addLog("AVATAR", `TalkingHead native lip-sync test (Language: en) ความยาว: ${audioDurationSec.toFixed(1)} วินาที`);
 
+            const timings = buildWordTimings(fullText, durationMs);
             head.speakAudio(
                 {
                     audio: audioBuffer,
-                    words: timing.words,
-                    wtimes: timing.wtimes,
-                    wdurations: timing.wdurations
+                    words: timings.words,
+                    wtimes: timings.wtimes,
+                    wdurations: timings.wdurations
                 },
-                { lipsyncLang: "th" }
+                { lipsyncLang: "en" }
             );
+            startAvatarMouthAnimation(head, fullText, durationMs);
 
-            startManualVisemeSync(head, visData, durationMs);
         } else {
-            playHtmlAudioWithMouthFallback(head, audioSrc, fullText);
+            throw new Error("TalkingHead.speakAudio is unavailable");
         }
     } catch (e) {
-        console.warn("TalkingHead native speakAudio fallback to HTML5 Audio:", e);
-        playHtmlAudioWithMouthFallback(head, audioSrc, fullText);
+        addLog("AVATAR", "TalkingHead native audio failed", e.message);
     }
 
     // Word-by-Word Synchronized Typing Animation
@@ -468,7 +303,7 @@ function speakWithWebSpeechFallback(head, text, lang = "th-TH", onTextUpdate = n
             }, 60);
         }
 
-        startRhythmicMouthAnimation(head, () => typeof window !== "undefined" && window.speechSynthesis.speaking);
+        // Web Speech cannot provide timestamps for native lip-sync.
     };
 
     utterance.onend = utterance.onerror = () => {
