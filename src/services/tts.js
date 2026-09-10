@@ -2,7 +2,8 @@ import { addLog } from "./logger";
 import { LipsyncTh } from "../modules/lipsync-th";
 
 const BACKEND_API_URL = "http://localhost:8000";
-const MOUTH_KEYS = ["Fcl_MTH_A", "Fcl_MTH_E", "Fcl_MTH_I", "Fcl_MTH_O", "Fcl_MTH_U", "Fcl_MTH_Close", "Fcl_MTH_Large"];
+const MOUTH_KEYS = ["Fcl_MTH_A", "Fcl_MTH_E", "Fcl_MTH_I", "Fcl_MTH_O", "Fcl_MTH_U", "Fcl_MTH_Close", "Fcl_MTH_Large", "jawOpen", "mouthOpen"];
+const VISEME_KEYS = ["aa", "E", "I", "O", "U", "PP", "FF", "TH", "DD", "kk", "nn", "RR", "CH", "SS"];
 const THAI_VISEME_MORPHS = {
     aa: "Fcl_MTH_A",
     E: "Fcl_MTH_E",
@@ -35,6 +36,27 @@ function buildWordTimings(text, durationMs) {
         elapsed += duration;
         return result;
     }, { words: [], wtimes: [], wdurations: [] });
+}
+
+function buildThaiVisemeTimings(text, durationMs) {
+    const thaiVisemes = new LipsyncTh().wordsToVisemes(text);
+    if (!thaiVisemes.visemes.length) {
+        return { visemes: [], vtimes: [], vdurations: [] };
+    }
+
+    const totalVisemeTime = Math.max(
+        1,
+        thaiVisemes.times.at(-1) + thaiVisemes.durations.at(-1)
+    );
+
+    return thaiVisemes.visemes.reduce((result, viseme, index) => {
+        if (!THAI_VISEME_MORPHS[viseme]) return result;
+
+        result.visemes.push(viseme);
+        result.vtimes.push((thaiVisemes.times[index] / totalVisemeTime) * durationMs);
+        result.vdurations.push((thaiVisemes.durations[index] / totalVisemeTime) * durationMs);
+        return result;
+    }, { visemes: [], vtimes: [], vdurations: [] });
 }
 
 let synthVoices = [];
@@ -88,83 +110,135 @@ export function stopAllSpeech(head = window.medfonHead) {
 }
 
 function resetAvatarMouth(head) {
-    if (!head?.setFixedValue) return;
-    MOUTH_KEYS.forEach((key) => setAvatarMouthValue(head, key, 0, null));
+    if (!head?.mtAvatar) return;
+    [...MOUTH_KEYS, ...VISEME_KEYS.map((key) => `viseme_${key}`)].forEach((key) => {
+        const morph = head.mtAvatar[key];
+        if (morph) {
+            morph.fixed = null;
+            morph.realtime = null;
+            morph.needsUpdate = true;
+        }
+        setSceneMorphValue(head, key, 0);
+    });
 }
 
-function setAvatarMouthValue(head, key, value, fixedValue = value) {
-    if (!head) return;
-    if (head.setFixedValue && fixedValue !== null) {
-        head.setFixedValue(key, fixedValue, 0);
-    } else if (head.setFixedValue) {
-        head.setFixedValue(key, null);
-    }
-
-    head.scene?.traverse((object) => {
-        const index = object.morphTargetDictionary?.[key];
-        if (object.isMesh && index !== undefined && object.morphTargetInfluences) {
-            object.morphTargetInfluences[index] = value;
+function setSceneMorphValue(head, key, value) {
+    if (!head?.scene) return;
+    const lowerKey = key.toLowerCase();
+    head.scene.traverse((obj) => {
+        if (!obj.isMesh || !obj.morphTargetDictionary || !obj.morphTargetInfluences) return;
+        const targetName = Object.keys(obj.morphTargetDictionary).find(
+            (name) => name.toLowerCase() === lowerKey
+        );
+        if (targetName !== undefined) {
+            obj.morphTargetInfluences[obj.morphTargetDictionary[targetName]] = value;
         }
     });
-    head.render?.();
 }
 
-export function testWideMouth(head) {
-    if (!head?.setFixedValue) return false;
-    const available = Boolean(head.mtAvatar?.Fcl_MTH_Large);
-    addLog("AVATAR", `ทดสอบอ้าปากกว้าง (Fcl_MTH_Large: ${available ? "พบ" : "ไม่พบ"})`);
-    if (!available) return false;
-
-    stopAllSpeech(head);
-    setAvatarMouthValue(head, "Fcl_MTH_Large", 1, 1);
-    window.currentWideMouthTimeout = window.setTimeout(() => {
-        setAvatarMouthValue(head, "Fcl_MTH_Large", 0, null);
-        window.currentWideMouthTimeout = null;
-    }, 2500);
-    return true;
+function setAvatarMouthValue(head, key, value) {
+    const morph = head?.mtAvatar?.[key];
+    if (morph) {
+        morph.fixed = null;
+        morph.realtime = value;
+        morph.needsUpdate = true;
+    }
+    setSceneMorphValue(head, key, value);
 }
 
-function startAvatarMouthAnimation(head, text, durationMs) {
-    if (!head?.setFixedValue) return;
+function startThaiMouthAnimation(head, text, durationMs) {
+    if (!head?.mtAvatar) return;
+
+    const availableKeys = [
+        ...MOUTH_KEYS,
+        ...VISEME_KEYS.map((key) => `viseme_${key}`)
+    ].filter((key) => head.mtAvatar[key]);
+    if (!availableKeys.length) {
+        addLog("AVATAR", "ไม่พบ morph สำหรับ realtime mouth animation");
+        return;
+    }
+    addLog("AVATAR", `เริ่ม realtime mouth animation (${availableKeys.length} morphs)`);
 
     if (window.currentMedfonAnimationFrame) {
         cancelAnimationFrame(window.currentMedfonAnimationFrame);
     }
 
     const thaiVisemes = new LipsyncTh().wordsToVisemes(text);
-    const visemes = thaiVisemes.visemes.length
-        ? thaiVisemes.visemes.map((viseme, index) => ({
-            key: THAI_VISEME_MORPHS[viseme],
-            start: (thaiVisemes.times[index] / Math.max(1, thaiVisemes.times.at(-1) + thaiVisemes.durations.at(-1))) * durationMs,
-            duration: (thaiVisemes.durations[index] / Math.max(1, thaiVisemes.times.at(-1) + thaiVisemes.durations.at(-1))) * durationMs
-        }))
-        : [];
+    const totalVisemeTime = Math.max(1, thaiVisemes.times.at(-1) + thaiVisemes.durations.at(-1));
+    const visemes = thaiVisemes.visemes.map((viseme, index) => ({
+        key: THAI_VISEME_MORPHS[viseme],
+        visemeKey: `viseme_${viseme}`,
+        start: (thaiVisemes.times[index] / totalVisemeTime) * durationMs,
+        duration: (thaiVisemes.durations[index] / totalVisemeTime) * durationMs
+    })).filter((item) => item.key);
+    const fallbackKeys = availableKeys.filter((key) => MOUTH_KEYS.slice(0, 5).includes(key));
     const startedAt = performance.now();
+    let lastPaint = 0;
 
-    const animate = () => {
-        const elapsed = performance.now() - startedAt;
+    const animate = (now) => {
+        const elapsed = now - startedAt;
         if (elapsed >= durationMs) {
             resetAvatarMouth(head);
             window.currentMedfonAnimationFrame = null;
             return;
         }
-
-        let activeKey = null;
-        let progress = 0;
-        const active = visemes.find((item) => elapsed >= item.start && elapsed < item.start + item.duration);
-        if (active) {
-            activeKey = active.key;
-            progress = Math.sin(((elapsed - active.start) / Math.max(1, active.duration)) * Math.PI);
-        } else {
-            activeKey = MOUTH_KEYS[Math.floor(elapsed / 140) % (MOUTH_KEYS.length - 1)];
-            progress = 0.35 + Math.abs(Math.sin(elapsed / 110)) * 0.35;
+        if (now - lastPaint < 33) {
+            window.currentMedfonAnimationFrame = requestAnimationFrame(animate);
+            return;
         }
+        lastPaint = now;
 
-        MOUTH_KEYS.forEach((key) => setAvatarMouthValue(head, key, key === activeKey ? progress : 0));
+        const active = visemes.find((item) => elapsed >= item.start && elapsed < item.start + item.duration);
+        const fallbackKey = fallbackKeys[Math.floor(elapsed / 150) % fallbackKeys.length]
+            || availableKeys[Math.floor(elapsed / 150) % availableKeys.length];
+        const activeKey = active && head.mtAvatar[active.visemeKey]
+            ? active.visemeKey
+            : active?.key || fallbackKey;
+        const activeKeys = new Set([activeKey, active?.key, active?.visemeKey].filter(Boolean));
+        const activeProgress = active
+            ? Math.min(1, Math.sin(((elapsed - active.start) / Math.max(1, active.duration)) * Math.PI) * 1.45)
+            : 0.5 + Math.abs(Math.sin(elapsed / 115)) * 0.4;
+        const mouthIsOpen = active?.key === "Fcl_MTH_A" || active?.key === "Fcl_MTH_E";
+        const wideProgress = mouthIsOpen ? Math.min(1, activeProgress * 1.15) : Math.min(0.75, activeProgress * 0.65);
+        const jawProgress = mouthIsOpen ? Math.min(1, activeProgress * 1.35) : Math.min(0.85, activeProgress * 0.9);
+
+        availableKeys.forEach((key) => {
+            const value = activeKeys.has(key)
+                ? activeProgress
+                : key === "Fcl_MTH_Large"
+                    ? wideProgress
+                    : key === "jawOpen" || key === "mouthOpen"
+                        ? jawProgress
+                        : 0;
+            if (typeof head.setValue === "function") {
+                head.setValue(key, value);
+            } else {
+                const morph = head.mtAvatar[key];
+                morph.fixed = null;
+                morph.realtime = value;
+                morph.needsUpdate = true;
+                setSceneMorphValue(head, key, value);
+            }
+        });
         window.currentMedfonAnimationFrame = requestAnimationFrame(animate);
     };
 
     window.currentMedfonAnimationFrame = requestAnimationFrame(animate);
+}
+
+export function testWideMouth(head) {
+    if (!head?.mtAvatar) return false;
+    const available = Boolean(head.mtAvatar?.Fcl_MTH_Large);
+    addLog("AVATAR", `ทดสอบอ้าปากกว้าง (Fcl_MTH_Large: ${available ? "พบ" : "ไม่พบ"})`);
+    if (!available) return false;
+
+    stopAllSpeech(head);
+    setAvatarMouthValue(head, "Fcl_MTH_Large", 1);
+    window.currentWideMouthTimeout = window.setTimeout(() => {
+        setAvatarMouthValue(head, "Fcl_MTH_Large", 0);
+        window.currentWideMouthTimeout = null;
+    }, 2500);
+    return true;
 }
 
 export async function speakTextWithAvatar(head, text, voice = "ped", lang = "th-TH", onTextUpdate = null) {
@@ -227,19 +301,24 @@ async function playCleanAudio(head, audioSrc, fullText, onTextUpdate) {
 
             const durationMs = audioDurationSec * 1000;
 
-            addLog("AVATAR", `TalkingHead native lip-sync test (Language: en) ความยาว: ${audioDurationSec.toFixed(1)} วินาที`);
+            addLog("AVATAR", `Thai viseme lip-sync ความยาว: ${audioDurationSec.toFixed(1)} วินาที`);
 
             const timings = buildWordTimings(fullText, durationMs);
+            const visemeTimings = buildThaiVisemeTimings(fullText, durationMs);
+            addLog("AVATAR", `เตรียม realtime mouth animation: ${visemeTimings.visemes.length} visemes`);
+            addLog("AVATAR", "ส่ง audio และ viseme เข้า TalkingHead");
             head.speakAudio(
                 {
                     audio: audioBuffer,
                     words: timings.words,
                     wtimes: timings.wtimes,
-                    wdurations: timings.wdurations
-                },
-                { lipsyncLang: "en" }
+                    wdurations: timings.wdurations,
+                    visemes: visemeTimings.visemes,
+                    vtimes: visemeTimings.vtimes,
+                    vdurations: visemeTimings.vdurations
+                }
             );
-            startAvatarMouthAnimation(head, fullText, durationMs);
+            addLog("AVATAR", "TalkingHead รับ audio และ viseme แล้ว");
 
         } else {
             throw new Error("TalkingHead.speakAudio is unavailable");
@@ -252,7 +331,7 @@ async function playCleanAudio(head, audioSrc, fullText, onTextUpdate) {
     if (onTextUpdate) {
         const chars = Array.from(fullText);
         const totalDurationMs = audioDurationSec * 1000;
-        const charDelay = Math.max(25, totalDurationMs / chars.length);
+        const charDelay = Math.max(80, totalDurationMs / chars.length);
 
         let charIdx = 0;
         onTextUpdate("");
@@ -303,7 +382,7 @@ function speakWithWebSpeechFallback(head, text, lang = "th-TH", onTextUpdate = n
             }, 60);
         }
 
-        // Web Speech cannot provide timestamps for native lip-sync.
+        startThaiMouthAnimation(head, text, Math.max(2000, Array.from(text).length * 120));
     };
 
     utterance.onend = utterance.onerror = () => {
