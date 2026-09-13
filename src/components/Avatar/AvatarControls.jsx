@@ -1,28 +1,47 @@
 import { useState } from "react";
 
+function getActiveHead(head) {
+    return head || (typeof window !== "undefined" ? window.medfonHead : null);
+}
+
 /**
  * Execute 3D Avatar gestures (wave, nod, think, welcome) on TalkingHead engine
  */
 export function playAvatarGesture(head, gestureName = "nod", mood = "happy") {
-    if (!head) return;
+    const activeHead = getActiveHead(head);
+    if (!activeHead) return;
 
     try {
-        if (head.setMood && typeof head.setMood === "function") {
-            head.setMood(mood);
+        if (activeHead.setMood && typeof activeHead.setMood === "function") {
+            activeHead.setMood(mood);
         }
 
-        if (head.audioCtx && head.audioCtx.state === "suspended") {
-            try { head.audioCtx.resume(); } catch (e) { }
+        if (activeHead.audioCtx && activeHead.audioCtx.state === "suspended") {
+            try { activeHead.audioCtx.resume(); } catch (e) { }
         }
 
         if (gestureName === "wave") {
-            if (typeof head.speakEmoji === "function") head.speakEmoji("👋");
+            if (typeof activeHead.playGesture === "function") {
+                activeHead.playGesture("handup");
+            } else if (typeof activeHead.speakEmoji === "function") {
+                activeHead.speakEmoji("👋");
+            }
         } else if (gestureName === "think") {
-            if (typeof head.speakEmoji === "function") head.speakEmoji("🤔");
+            if (typeof activeHead.playGesture === "function") {
+                activeHead.playGesture("shrug");
+            } else if (typeof activeHead.speakEmoji === "function") {
+                activeHead.speakEmoji("🤔");
+            }
         } else if (gestureName === "welcome" || gestureName === "wai") {
-            if (typeof head.speakEmoji === "function") head.speakEmoji("🙏");
+            if (typeof activeHead.playGesture === "function") {
+                activeHead.playGesture("namaste");
+            } else if (typeof activeHead.speakEmoji === "function") {
+                activeHead.speakEmoji("🙏");
+            }
         } else if (gestureName === "nod" || gestureName === "happy") {
-            if (typeof head.speakEmoji === "function") head.speakEmoji("😊");
+            if (typeof activeHead.speakEmoji === "function") {
+                activeHead.speakEmoji("😊");
+            }
         }
     } catch (err) {
         console.warn("Avatar gesture execution warning:", err);
@@ -33,29 +52,31 @@ function AvatarControls({ head, morphKeys = [] }) {
     const [activeTab, setActiveTab] = useState("camera");
 
     const setCameraView = (viewName) => {
-        if (!head) return;
-        if (head.audioCtx && head.audioCtx.state === "suspended") {
-            try { head.audioCtx.resume(); } catch (e) {}
+        const activeHead = getActiveHead(head);
+        if (!activeHead) return;
+        if (activeHead.audioCtx && activeHead.audioCtx.state === "suspended") {
+            try { activeHead.audioCtx.resume(); } catch (e) { }
         }
-        if (typeof head.setView === "function") {
-            head.setView(viewName);
+        if (typeof activeHead.setView === "function") {
+            activeHead.setView(viewName);
         }
     };
 
     const triggerMorphKey = (key) => {
-        if (!head) return;
+        const activeHead = getActiveHead(head);
+        if (!activeHead) return;
         try {
-            if (head.audioCtx && head.audioCtx.state === "suspended") {
-                try { head.audioCtx.resume(); } catch (e) {}
+            if (activeHead.audioCtx && activeHead.audioCtx.state === "suspended") {
+                try { activeHead.audioCtx.resume(); } catch (e) { }
             }
 
-            if (typeof head.setFixedValue === "function") {
-                head.setFixedValue(key, 1.0);
+            if (typeof activeHead.setFixedValue === "function") {
+                activeHead.setFixedValue(key, 1.0);
             }
 
             const lowerKey = key.toLowerCase();
-            if (head.scene) {
-                head.scene.traverse((obj) => {
+            if (activeHead.scene) {
+                activeHead.scene.traverse((obj) => {
                     if (obj.isMesh && obj.morphTargetDictionary && obj.morphTargetInfluences) {
                         let idx = obj.morphTargetDictionary[key];
                         if (idx === undefined) {
@@ -186,8 +207,8 @@ function AvatarControls({ head, morphKeys = [] }) {
                             <button
                                 key={key}
                                 className={`morph-chip ${key.startsWith("viseme") || key.includes("mouth") || key.includes("MTH") || key.includes("jaw")
-                                        ? "highlight"
-                                        : ""
+                                    ? "highlight"
+                                    : ""
                                     }`}
                                 onClick={() => triggerMorphKey(key)}
                             >

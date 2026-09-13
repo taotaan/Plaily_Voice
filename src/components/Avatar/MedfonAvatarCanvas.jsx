@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { TalkingHead } from "@met4citizen/talkinghead";
+import { LipsyncTh } from "../../modules/lipsync-th";
 import { addLog } from "../../services/logger";
 
 function MedfonAvatarCanvas({ onAvatarLoaded, avatarUrl = "/avatars/medfon.glb" }) {
@@ -23,17 +24,23 @@ function MedfonAvatarCanvas({ onAvatarLoaded, avatarUrl = "/avatars/medfon.glb" 
                     {
                         ttsEndpoint: null,
                         cameraView: "head",
-                        lipsyncModules: ["en"]
+                        lipsyncModules: []
                     }
                 );
+
+                // Register Thai Lipsync Processor directly into TalkingHead Engine (No dynamic fetch 404)
+                if (!head.lipsync) head.lipsync = {};
+                const thaiLipsync = new LipsyncTh();
+                head.lipsync["th"] = thaiLipsync;
+                head.lipsync["en"] = thaiLipsync;
 
                 headRef.current = head;
                 window.medfonHead = head;
 
-                // Load avatar model
+                // Load avatar model with Thai lipsync
                 await head.showAvatar({
                     url: avatarUrl,
-                    lipsyncLang: "en"
+                    lipsyncLang: "th"
                 });
 
                 // Diagnostic Scan & Dynamic Viseme Mesh Mapping

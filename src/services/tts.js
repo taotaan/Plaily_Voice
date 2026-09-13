@@ -71,12 +71,17 @@ if (typeof window !== "undefined" && "speechSynthesis" in window) {
     }
 }
 
+function getActiveHead(head) {
+    return head || (typeof window !== "undefined" ? window.medfonHead : null);
+}
+
 /**
  * Stop any current audio or speech synthesis
  */
-export function stopAllSpeech(head = window.medfonHead) {
-    if (head && typeof head.stopSpeaking === "function") {
-        head.stopSpeaking();
+export function stopAllSpeech(head) {
+    const h = getActiveHead(head);
+    if (h && typeof h.stopSpeaking === "function") {
+        h.stopSpeaking();
     }
 
     if (window.currentMedfonAudio) {
@@ -106,19 +111,23 @@ export function stopAllSpeech(head = window.medfonHead) {
             // Ignore browser speech cleanup errors.
         }
     }
-    resetAvatarMouth(head);
+    resetAvatarMouth(h);
 }
 
 function resetAvatarMouth(head) {
-    if (!head?.mtAvatar) return;
+    const h = getActiveHead(head);
+    if (!h?.mtAvatar) return;
     [...MOUTH_KEYS, ...VISEME_KEYS.map((key) => `viseme_${key}`)].forEach((key) => {
-        const morph = head.mtAvatar[key];
+        if (typeof h.setFixedValue === "function") {
+            h.setFixedValue(key, null);
+        }
+        const morph = h.mtAvatar[key];
         if (morph) {
             morph.fixed = null;
             morph.realtime = null;
             morph.needsUpdate = true;
         }
-        setSceneMorphValue(head, key, 0);
+        setSceneMorphValue(h, key, 0);
     });
 }
 
@@ -137,89 +146,87 @@ function setSceneMorphValue(head, key, value) {
 }
 
 function setAvatarMouthValue(head, key, value) {
-    const morph = head?.mtAvatar?.[key];
+    const h = getActiveHead(head);
+    if (typeof h?.setFixedValue === "function") {
+        h.setFixedValue(key, value > 0.01 ? value : null);
+    }
+    const morph = h?.mtAvatar?.[key];
     if (morph) {
-        morph.fixed = null;
+        morph.fixed = value > 0.01 ? value : null;
         morph.realtime = value;
         morph.needsUpdate = true;
     }
-    setSceneMorphValue(head, key, value);
+    setSceneMorphValue(h, key, value);
 }
 
-function startThaiMouthAnimation(head, text, durationMs) {
-    if (!head?.mtAvatar) return;
+/**
+ * Natural Thai Mouth Animation Loop (60 FPS)
+ * Dynamically animates visemes and mouth blendshapes smoothly based on Thai phonetic timing.
+ */
+export function startThaiMouthAnimation(head, durationMs, text = "") {
+    const h = getActiveHead(head);
+    if (!h) return;
+
+    if (window.currentMedfonAnimationFrame) {
+        cancelAnimationFrame(window.currentMedfonAnimationFrame);
+        window.currentMedfonAnimationFrame = null;
+    }
 
     const availableKeys = [
         ...MOUTH_KEYS,
         ...VISEME_KEYS.map((key) => `viseme_${key}`)
-    ].filter((key) => head.mtAvatar[key]);
-    if (!availableKeys.length) {
-        addLog("AVATAR", "ไม่พบ morph สำหรับ realtime mouth animation");
-        return;
-    }
-    addLog("AVATAR", `เริ่ม realtime mouth animation (${availableKeys.length} morphs)`);
+    ].filter((key) => h.mtAvatar && h.mtAvatar[key]);
 
-    if (window.currentMedfonAnimationFrame) {
-        cancelAnimationFrame(window.currentMedfonAnimationFrame);
-    }
+    if (!availableKeys.length) return;
 
-    const thaiVisemes = new LipsyncTh().wordsToVisemes(text);
+    addLog("AVATAR", `👄 เริ่มลูปขยับปากธรรมชาติ (${availableKeys.length} morphs, ${(durationMs / 1000).toFixed(1)}s)`);
+
+    const thaiVisemes = new LipsyncTh().wordsToVisemes(text || "สวัสดีครับ");
     const totalVisemeTime = Math.max(1, thaiVisemes.times.at(-1) + thaiVisemes.durations.at(-1));
     const visemes = thaiVisemes.visemes.map((viseme, index) => ({
-        key: THAI_VISEME_MORPHS[viseme],
+        key: THAI_VISEME_MORPHS[viseme] || "Fcl_MTH_A",
         visemeKey: `viseme_${viseme}`,
         start: (thaiVisemes.times[index] / totalVisemeTime) * durationMs,
         duration: (thaiVisemes.durations[index] / totalVisemeTime) * durationMs
-    })).filter((item) => item.key);
-    const fallbackKeys = availableKeys.filter((key) => MOUTH_KEYS.slice(0, 5).includes(key));
-    const startedAt = performance.now();
-    let lastPaint = 0;
+    }));
+
+    const startTime = performance.now();
 
     const animate = (now) => {
-        const elapsed = now - startedAt;
+        const elapsed = now - startTime;
         if (elapsed >= durationMs) {
-            resetAvatarMouth(head);
+            resetAvatarMouth(h);
             window.currentMedfonAnimationFrame = null;
             return;
         }
-        if (now - lastPaint < 33) {
-            window.currentMedfonAnimationFrame = requestAnimationFrame(animate);
-            return;
-        }
-        lastPaint = now;
 
         const active = visemes.find((item) => elapsed >= item.start && elapsed < item.start + item.duration);
-        const fallbackKey = fallbackKeys[Math.floor(elapsed / 150) % fallbackKeys.length]
-            || availableKeys[Math.floor(elapsed / 150) % availableKeys.length];
-        const activeKey = active && head.mtAvatar[active.visemeKey]
-            ? active.visemeKey
-            : active?.key || fallbackKey;
-        const activeKeys = new Set([activeKey, active?.key, active?.visemeKey].filter(Boolean));
+
+        // Smooth natural speech mouth opening progress (0.0 -> 0.65)
         const activeProgress = active
-            ? Math.min(1, Math.sin(((elapsed - active.start) / Math.max(1, active.duration)) * Math.PI) * 1.45)
-            : 0.5 + Math.abs(Math.sin(elapsed / 115)) * 0.4;
-        const mouthIsOpen = active?.key === "Fcl_MTH_A" || active?.key === "Fcl_MTH_E";
-        const wideProgress = mouthIsOpen ? Math.min(1, activeProgress * 1.15) : Math.min(0.75, activeProgress * 0.65);
-        const jawProgress = mouthIsOpen ? Math.min(1, activeProgress * 1.35) : Math.min(0.85, activeProgress * 0.9);
+            ? Math.min(0.7, Math.sin(((elapsed - active.start) / Math.max(1, active.duration)) * Math.PI) * 0.85)
+            : 0.1 + Math.abs(Math.sin(elapsed / 120)) * 0.3;
+
+        const activeKey = active?.key || "Fcl_MTH_A";
+        const activeVisemeKey = active?.visemeKey || "viseme_aa";
+        const activeKeys = new Set([activeKey, activeVisemeKey].filter(Boolean));
 
         availableKeys.forEach((key) => {
             const value = activeKeys.has(key)
                 ? activeProgress
-                : key === "Fcl_MTH_Large"
-                    ? wideProgress
-                    : key === "jawOpen" || key === "mouthOpen"
-                        ? jawProgress
-                        : 0;
-            if (typeof head.setValue === "function") {
-                head.setValue(key, value);
-            } else {
-                const morph = head.mtAvatar[key];
+                : key === "jawOpen" || key === "mouthOpen"
+                    ? activeProgress * 0.45
+                    : 0;
+
+            const morph = h.mtAvatar ? h.mtAvatar[key] : null;
+            if (morph) {
                 morph.fixed = null;
                 morph.realtime = value;
                 morph.needsUpdate = true;
-                setSceneMorphValue(head, key, value);
             }
+            setSceneMorphValue(h, key, value);
         });
+
         window.currentMedfonAnimationFrame = requestAnimationFrame(animate);
     };
 
@@ -227,24 +234,28 @@ function startThaiMouthAnimation(head, text, durationMs) {
 }
 
 export function testWideMouth(head) {
-    if (!head?.mtAvatar) return false;
-    const available = Boolean(head.mtAvatar?.Fcl_MTH_Large);
-    addLog("AVATAR", `ทดสอบอ้าปากกว้าง (Fcl_MTH_Large: ${available ? "พบ" : "ไม่พบ"})`);
-    if (!available) return false;
+    const h = getActiveHead(head);
+    if (!h) return false;
+    addLog("AVATAR", "ทดสอบอ้าปาก 100%");
+    stopAllSpeech(h);
 
-    stopAllSpeech(head);
-    setAvatarMouthValue(head, "Fcl_MTH_Large", 1);
+    const wideKeys = ["Fcl_MTH_A", "Fcl_MTH_Large", "jawOpen", "viseme_aa", "mouthOpen"];
+    wideKeys.forEach((key) => {
+        setAvatarMouthValue(h, key, 0.8);
+    });
+
     window.currentWideMouthTimeout = window.setTimeout(() => {
-        setAvatarMouthValue(head, "Fcl_MTH_Large", 0);
+        resetAvatarMouth(h);
         window.currentWideMouthTimeout = null;
-    }, 2500);
+    }, 3000);
     return true;
 }
 
 export async function speakTextWithAvatar(head, text, voice = "ped", lang = "th-TH", onTextUpdate = null) {
+    const h = getActiveHead(head);
     if (!text) return;
 
-    stopAllSpeech(head);
+    stopAllSpeech(h);
 
     const cleanText = text.replace(/[*#_`~]/g, "").trim();
 
@@ -262,7 +273,7 @@ export async function speakTextWithAvatar(head, text, voice = "ped", lang = "th-
             const data = await response.json();
             if (data.status === "success" && data.audio_base64) {
                 addLog("TTS", "ได้รับไฟล์เสียง WAV จาก Pathumma TokenMind TTS เรียบร้อยแล้ว", `Source: ${data.source}`);
-                playCleanAudio(head, data.audio_base64, cleanText, onTextUpdate);
+                playCleanAudio(h, data.audio_base64, cleanText, onTextUpdate);
                 return;
             }
         }
@@ -271,17 +282,18 @@ export async function speakTextWithAvatar(head, text, voice = "ped", lang = "th-
     }
 
     // 2. Fallback to Web Speech API (th-TH)
-    speakWithWebSpeechFallback(head, cleanText, lang, onTextUpdate);
+    speakWithWebSpeechFallback(h, cleanText, lang, onTextUpdate);
 }
 
 /**
  * Play Audio cleanly using TalkingHead native speakAudio engine, Sync Visemes automatically, and stream text word-by-word
  */
 async function playCleanAudio(head, audioSrc, fullText, onTextUpdate) {
+    const h = getActiveHead(head);
     let audioDurationSec = 3.5;
 
     try {
-        if (head && typeof head.speakAudio === "function") {
+        if (h && typeof h.speakAudio === "function") {
             const base64Clean = audioSrc.replace(/^data:audio\/\w+;base64,/, "");
             const binaryStr = window.atob(base64Clean);
             const len = binaryStr.length;
@@ -291,7 +303,7 @@ async function playCleanAudio(head, audioSrc, fullText, onTextUpdate) {
             }
             const arrayBuffer = bytes.buffer;
 
-            const audioCtx = head.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+            const audioCtx = h.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
             if (audioCtx.state === "suspended") {
                 await audioCtx.resume();
             }
@@ -303,22 +315,34 @@ async function playCleanAudio(head, audioSrc, fullText, onTextUpdate) {
 
             addLog("AVATAR", `Thai viseme lip-sync ความยาว: ${audioDurationSec.toFixed(1)} วินาที`);
 
+            // Ensure LipsyncTh processor is registered
+            if (!h.lipsync) h.lipsync = {};
+            if (!h.lipsync["th"]) {
+                h.lipsync["th"] = new LipsyncTh();
+            }
+
             const timings = buildWordTimings(fullText, durationMs);
             const visemeTimings = buildThaiVisemeTimings(fullText, durationMs);
             addLog("AVATAR", `เตรียม realtime mouth animation: ${visemeTimings.visemes.length} visemes`);
             addLog("AVATAR", "ส่ง audio และ viseme เข้า TalkingHead");
-            head.speakAudio(
+
+            h.speakAudio(
                 {
                     audio: audioBuffer,
+                    text: fullText,
                     words: timings.words,
                     wtimes: timings.wtimes,
                     wdurations: timings.wdurations,
                     visemes: visemeTimings.visemes,
                     vtimes: visemeTimings.vtimes,
                     vdurations: visemeTimings.vdurations
-                }
+                },
+                { lipsyncLang: "th" }
             );
-            addLog("AVATAR", "TalkingHead รับ audio และ viseme แล้ว");
+            addLog("AVATAR", "TalkingHead รับ audio และ viseme เรียบร้อยแล้ว");
+
+            // Trigger Natural Thai Mouth animation loop
+            startThaiMouthAnimation(h, durationMs, fullText);
 
         } else {
             throw new Error("TalkingHead.speakAudio is unavailable");
@@ -351,7 +375,12 @@ async function playCleanAudio(head, audioSrc, fullText, onTextUpdate) {
  * Web Speech API Fallback (th-TH) with synchronized typing animation and 60fps mouth movement
  */
 function speakWithWebSpeechFallback(head, text, lang = "th-TH", onTextUpdate = null) {
+    const h = getActiveHead(head);
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    if (h?.audioCtx && h.audioCtx.state === "suspended") {
+        try { h.audioCtx.resume(); } catch (e) { }
+    }
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang;
@@ -382,15 +411,24 @@ function speakWithWebSpeechFallback(head, text, lang = "th-TH", onTextUpdate = n
             }, 60);
         }
 
-        startThaiMouthAnimation(head, text, Math.max(2000, Array.from(text).length * 120));
+        const calculatedDuration = Math.max(2000, Array.from(text).length * 120);
+        startThaiMouthAnimation(h, calculatedDuration, text);
     };
 
     utterance.onend = utterance.onerror = () => {
-        stopAllSpeech(head);
+        stopAllSpeech(h);
         if (onTextUpdate) {
             onTextUpdate(text);
         }
     };
 
-    window.speechSynthesis.speak(utterance);
+    // Chrome Web Speech safety timeout to clear previous queue
+    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+        try { window.speechSynthesis.cancel(); } catch (e) { }
+        setTimeout(() => {
+            window.speechSynthesis.speak(utterance);
+        }, 50);
+    } else {
+        window.speechSynthesis.speak(utterance);
+    }
 }

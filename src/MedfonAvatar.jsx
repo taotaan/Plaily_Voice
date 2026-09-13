@@ -1,6 +1,6 @@
 import { useState } from "react";
 import MedfonAvatarCanvas from "./components/Avatar/MedfonAvatarCanvas";
-import { playAvatarGesture } from "./components/Avatar/AvatarControls";
+import AvatarControls, { playAvatarGesture } from "./components/Avatar/AvatarControls";
 import ChatBox from "./components/Chat/ChatBox";
 import ChatInput from "./components/Chat/ChatInput";
 import { sendChatMessage } from "./services/api";
@@ -9,6 +9,7 @@ import { addLog } from "./services/logger";
 
 function MedfonAvatar() {
     const [headInstance, setHeadInstance] = useState(null);
+    const [morphKeys, setMorphKeys] = useState([]);
     const [messages, setMessages] = useState([
         {
             id: 1,
@@ -25,6 +26,7 @@ function MedfonAvatar() {
         if ((!keys || keys.length === 0) && head && head.mtAvatar) {
             keys = Object.keys(head.mtAvatar);
         }
+        setMorphKeys(keys);
         addLog("AVATAR", `3D Avatar Engine (TalkingHead) โหลดสำเร็จ (พบ ${keys.length} Morph Keys)`);
     };
 
@@ -60,11 +62,13 @@ function MedfonAvatar() {
 
             setMessages((prev) => [...prev, botMsgObj]);
 
+            const activeHead = headInstance || window.medfonHead;
+
             // Stage 4: Trigger 3D Avatar Gestures & Emotions
-            playAvatarGesture(headInstance, botGesture, botMood);
+            playAvatarGesture(activeHead, botGesture, botMood);
 
             // Stage 3 & 4: Trigger Pathumma TTS Audio with Synchronized Word-by-Word Typing
-            speakTextWithAvatar(headInstance, botReplyText, "ped", "th-TH", (partialText) => {
+            speakTextWithAvatar(activeHead, botReplyText, "ped", "th-TH", (partialText) => {
                 setMessages((prev) =>
                     prev.map((m) => (m.id === botMsgId ? { ...m, text: partialText } : m))
                 );
@@ -88,6 +92,8 @@ function MedfonAvatar() {
                         </div>
 
                         <MedfonAvatarCanvas onAvatarLoaded={handleAvatarLoaded} />
+
+                        <AvatarControls head={headInstance || window.medfonHead} morphKeys={morphKeys} />
                     </div>
                 </div>
 

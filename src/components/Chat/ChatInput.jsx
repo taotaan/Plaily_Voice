@@ -64,33 +64,8 @@ function ChatInput({ onSendMessage, isSending = false }) {
         setText("");
     };
 
-    const handleQuickQuestion = (qText) => {
-        if (isSending) return;
-        addLog("STT", `เลือกคำถามด่วน: "${qText}"`);
-        onSendMessage(qText);
-    };
-
-    const quickQuestions = [
-        "สวัสดีค่ะ ขอแนะนำตัวเองหน่อยค่ะ",
-        "วันนี้วันที่ 28/08/2569 คือวันอะไร",
-        "ขอคำแนะนำการดูแลสุขภาพเบื้องต้น"
-    ];
-
     return (
         <div className="chat-input-wrapper">
-            <div className="quick-chips-container">
-                {quickQuestions.map((q, idx) => (
-                    <button
-                        key={idx}
-                        className="quick-chip-btn"
-                        onClick={() => handleQuickQuestion(q)}
-                        disabled={isSending}
-                    >
-                        💡 {q}
-                    </button>
-                ))}
-            </div>
-
             <form onSubmit={handleSubmit} className="chat-input-form">
                 <button
                     type="button"
