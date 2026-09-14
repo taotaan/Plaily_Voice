@@ -1,16 +1,42 @@
 import { useEffect, useRef, useState } from "react";
 import { TalkingHead } from "@met4citizen/talkinghead";
 import { LipsyncTh } from "../../modules/lipsync-th";
+import { openWebcamStream } from "../../services/faceTracker";
 import { addLog } from "../../services/logger";
 
-function MedfonAvatarCanvas({ onAvatarLoaded, avatarUrl = "/avatars/medfon.glb" }) {
+function MedfonAvatarCanvas({
+    onAvatarLoaded,
+    avatarUrl = "/avatars/medfon.glb",
+    videoRef,
+    isCameraOpen,
+    isFaceTracking,
+    trackerStatus
+}) {
     const containerRef = useRef(null);
     const headRef = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState(null);
 
+    // Auto stream camera feed into videoRef whenever camera or face tracking is open
+    useEffect(() => {
+        if ((isCameraOpen || isFaceTracking) && videoRef && videoRef.current) {
+            openWebcamStream(videoRef.current).then((stream) => {
+                if (videoRef.current && stream && videoRef.current.srcObject !== stream) {
+                    videoRef.current.srcObject = stream;
+                }
+                if (videoRef.current) {
+                    videoRef.current.play().catch(() => { });
+                }
+            }).catch((err) => {
+                console.warn("Webcam stream preview error:", err);
+            });
+        }
+    }, [isCameraOpen, isFaceTracking, videoRef]);
+
+
     useEffect(() => {
         let mounted = true;
+
 
         async function initAvatar() {
             if (!containerRef.current) return;
@@ -32,6 +58,7 @@ function MedfonAvatarCanvas({ onAvatarLoaded, avatarUrl = "/avatars/medfon.glb" 
                     {
                         ttsEndpoint: null,
                         cameraView: "head",
+                        cameraDistance: -0.6,
                         lipsyncModules: []
                     }
                 );
@@ -50,6 +77,10 @@ function MedfonAvatarCanvas({ onAvatarLoaded, avatarUrl = "/avatars/medfon.glb" 
                     url: avatarUrl,
                     lipsyncLang: "th"
                 });
+
+                if (typeof head.setView === "function") {
+                    head.setView("head", { cameraDistance: -0.6 });
+                }
 
                 if (!mounted) {
                     if (typeof head.stop === "function") {
@@ -166,6 +197,20 @@ function MedfonAvatarCanvas({ onAvatarLoaded, avatarUrl = "/avatars/medfon.glb" 
         <div className="avatar-canvas-wrapper">
             <div ref={containerRef} className="avatar-canvas-container" />
 
+            {/* Picture-in-Picture User WebCam preview box (TalkingHead Video Conferencing Style) */}
+            <div className={`canvas-camera-box ${isCameraOpen || isFaceTracking ? "active" : ""}`}>
+                <video
+                    ref={videoRef}
+                    className="canvas-camera-video"
+                    autoPlay
+                    playsInline
+                    muted
+                />
+                <div className="canvas-camera-badge">
+                    <span className="live-dot">●</span> LIVE (คุณ)
+                </div>
+            </div>
+
             {isLoading && (
                 <div className="avatar-loading-overlay">
                     <div className="spinner" />
@@ -183,3 +228,4 @@ function MedfonAvatarCanvas({ onAvatarLoaded, avatarUrl = "/avatars/medfon.glb" 
 }
 
 export default MedfonAvatarCanvas;
+

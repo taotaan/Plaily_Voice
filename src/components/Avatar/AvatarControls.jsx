@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { startFaceTracker, stopFaceTracker, openWebcamStream } from "../../services/faceTracker";
 
 function getActiveHead(head) {
     return head || (typeof window !== "undefined" ? window.medfonHead : null);
@@ -48,8 +49,91 @@ export function playAvatarGesture(head, gestureName = "nod", mood = "happy") {
     }
 }
 
-function AvatarControls({ head, morphKeys = [] }) {
+function AvatarControls({
+    head,
+    morphKeys = [],
+    videoRef,
+    isCameraOpen,
+    setIsCameraOpen,
+    isFaceTracking,
+    setIsFaceTracking,
+    trackerStatus,
+    setTrackerStatus,
+    currentView,
+    setCurrentView
+}) {
     const [activeTab, setActiveTab] = useState("camera");
+
+    const toggleWebcam = async () => {
+        if (isCameraOpen) {
+            if (!isFaceTracking) {
+                stopFaceTracker();
+            }
+            if (setIsCameraOpen) setIsCameraOpen(false);
+            if (setTrackerStatus) setTrackerStatus("");
+        } else {
+            try {
+                if (setTrackerStatus) setTrackerStatus("กำลังขอสิทธิ์เปิดกล้อง...");
+                const targetVid = videoRef ? videoRef.current : null;
+                await openWebcamStream(targetVid);
+                if (setIsCameraOpen) setIsCameraOpen(true);
+                if (setTrackerStatus) setTrackerStatus("🎥 เปิดกล้องคุยสดเรียบร้อย (พูดคุยโต้ตอบได้ทันที)");
+            } catch (err) {
+                console.error("Webcam open error:", err);
+                if (setTrackerStatus) setTrackerStatus(`⚠️ ${err.message || "ไม่สามารถเปิดกล้องได้"}`);
+                if (setIsCameraOpen) setIsCameraOpen(false);
+            }
+        }
+    };
+
+    const toggleFaceTracking = async () => {
+        if (isFaceTracking) {
+            stopFaceTracker();
+            if (setIsFaceTracking) setIsFaceTracking(false);
+            if (setTrackerStatus) setTrackerStatus(isCameraOpen ? "🎥 เปิดกล้องคุยสด" : "");
+            const activeHead = getActiveHead(head);
+            if (activeHead && typeof activeHead.setValue === "function") {
+                activeHead.setValue("headRotateY", 0);
+                activeHead.setValue("headRotateX", 0);
+            }
+        } else {
+            try {
+                if (setTrackerStatus) setTrackerStatus("กำลังเตรียมระบบสบตา...");
+                const targetVid = videoRef ? videoRef.current : null;
+                await startFaceTracker(targetVid, ({ yaw, pitch, detected }) => {
+                    const activeHead = getActiveHead(head);
+                    if (activeHead) {
+                        if (detected) {
+                            if (typeof activeHead.setValue === "function") {
+                                activeHead.setValue("headRotateY", yaw * 0.4);
+                                activeHead.setValue("headRotateX", pitch * 0.3);
+                            }
+                            if (setTrackerStatus) setTrackerStatus("👁️ กำลังสบตากับคุณ");
+                        } else {
+                            if (typeof activeHead.setValue === "function") {
+                                activeHead.setValue("headRotateY", 0);
+                                activeHead.setValue("headRotateX", 0);
+                            }
+                            if (setTrackerStatus) setTrackerStatus("🔍 กำลังมองหาใบหน้า...");
+                        }
+                    }
+                });
+                if (setIsFaceTracking) setIsFaceTracking(true);
+                if (setIsCameraOpen) setIsCameraOpen(true);
+            } catch (err) {
+                console.error("Face tracker error:", err);
+                if (setTrackerStatus) setTrackerStatus(`⚠️ ${err.message || "ไม่สามารถเปิดระบบสบตาได้"}`);
+                if (setIsFaceTracking) setIsFaceTracking(false);
+            }
+        }
+    };
+
+    useEffect(() => {
+        return () => {
+            stopFaceTracker();
+        };
+    }, []);
+
 
     const setCameraView = (viewName) => {
         const activeHead = getActiveHead(head);
@@ -169,6 +253,18 @@ function AvatarControls({ head, morphKeys = [] }) {
             <div className="controls-tab-body">
                 {activeTab === "camera" && (
                     <div className="btn-group">
+                        <button
+                            className={`ctrl-btn ${isCameraOpen ? "pink" : "green"}`}
+                            onClick={toggleWebcam}
+                        >
+                            {isCameraOpen ? "🎥 ⏹️ ปิดกล้อง" : "🎥 เปิดกล้องคุยสด"}
+                        </button>
+                        <button
+                            className={`ctrl-btn ${isFaceTracking ? "orange" : "teal"}`}
+                            onClick={toggleFaceTracking}
+                        >
+                            {isFaceTracking ? "👁️ ⏹️ ปิดสบตา" : "📷 สบตา (Face Tracking)"}
+                        </button>
                         <button className="ctrl-btn teal" onClick={() => setCameraView("head")}>
                             🔍 ใบหน้า (Head)
                         </button>
@@ -189,6 +285,24 @@ function AvatarControls({ head, morphKeys = [] }) {
                         </button>
                     </div>
                 )}
+
+
+                <div
+                    className="webcam-dedicated-card"
+                    style={{ display: isFaceTracking ? "flex" : "none" }}
+                >
+                    <div className="webcam-info-side">
+                        <div className="webcam-status-header">
+                            <span className="status-live-dot">●</span>
+                            <span className="webcam-status-title">ระบบสบตาผู้ใช้ (Eye Contact Face Tracking)</span>
+                        </div>
+                        <p className="webcam-status-desc">{trackerStatus || "กำลังตรวจจับใบหน้า..."}</p>
+                        <button className="webcam-close-btn" onClick={toggleFaceTracking}>
+                            ⏹️ ปิดระบบสบตา
+                        </button>
+                    </div>
+                </div>
+
 
                 {activeTab === "mouth" && (
                     <div className="btn-group">

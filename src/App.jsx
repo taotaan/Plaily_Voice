@@ -7,7 +7,7 @@ function App() {
                 <div className="header-brand">
                     <div className="brand-logo">🌸</div>
                     <div className="brand-text">
-                        <h1>ปลายลี่ (Plailie) AI</h1>
+                        <h1>ปลายลี่ (Plaily) AI</h1>
                         <span className="brand-tagline">ผู้ช่วยเสมือนภาษาไทย 3D Interactive Avatar</span>
                     </div>
                 </div>

@@ -24,7 +24,7 @@
 body {
   font-family: 'Prompt', 'Inter', sans-serif;
   background-color: var(--bg-dark);
-  background-image: 
+  background-image:
     radial-gradient(at 0% 0%, rgba(13, 148, 136, 0.15) 0px, transparent 50%),
     radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.15) 0px, transparent 50%);
   color: var(--text-main);
@@ -107,6 +107,7 @@ body {
 }
 
 .panel-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 660px;
@@ -153,7 +154,7 @@ body {
   position: relative;
   z-index: 1;
   width: 100%;
-  height: 360px;
+  height: 440px;
   flex-shrink: 0;
   border-radius: var(--radius-md);
   overflow: hidden;
@@ -173,7 +174,53 @@ body {
   max-height: 100%;
 }
 
-.avatar-loading-overlay, .avatar-error-overlay {
+/* Picture-in-Picture WebCam Preview box inside 3D Canvas */
+.canvas-camera-box {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  width: 170px;
+  height: 125px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid rgba(6, 182, 212, 0.6);
+  background: #000;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  z-index: 10;
+  display: none;
+  transition: all 0.3s ease;
+}
+
+.canvas-camera-box.active {
+  display: block;
+}
+
+.canvas-camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.canvas-camera-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  color: #38bdf8;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+
+.avatar-loading-overlay,
+.avatar-error-overlay {
   position: absolute;
   inset: 0;
   background: rgba(15, 23, 42, 0.85);
@@ -196,7 +243,9 @@ body {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Avatar Controls Component */
@@ -264,10 +313,25 @@ body {
     transform: scale(0.96);
   }
 
-  &.teal { background: #0d9488; color: white; }
-  &.green { background: #16a34a; color: white; }
-  &.orange { background: #ea580c; color: white; }
-  &.pink { background: #db2777; color: white; }
+  &.teal {
+    background: #0d9488;
+    color: white;
+  }
+
+  &.green {
+    background: #16a34a;
+    color: white;
+  }
+
+  &.orange {
+    background: #ea580c;
+    color: white;
+  }
+
+  &.pink {
+    background: #db2777;
+    color: white;
+  }
 }
 
 .morph-keys-scroll {
@@ -300,10 +364,110 @@ body {
   }
 }
 
+.webcam-dedicated-card {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  border-radius: var(--radius-md);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.webcam-video-box {
+  width: 160px;
+  height: 120px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1.5px solid rgba(13, 148, 136, 0.5);
+  background: #000;
+  flex-shrink: 0;
+}
+
+.webcam-dedicated-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.webcam-info-side {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.webcam-status-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-live-dot {
+  color: #2dd4bf;
+  font-size: 14px;
+  animation: pulseDot 1.5s infinite;
+}
+
+@keyframes pulseDot {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.webcam-status-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.webcam-status-desc {
+  font-size: 12px;
+  color: #38bdf8;
+}
+
+.webcam-close-btn {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #f43f5e;
+  background: rgba(244, 63, 94, 0.15);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.webcam-close-btn:hover {
+  background: rgba(244, 63, 94, 0.3);
+}
+
+.quick-chip-btn.active-chip {
+  background: rgba(13, 148, 136, 0.3);
+  color: #2dd4bf;
+  border-color: #0d9488;
+  font-weight: 600;
+}
+
 /* Chat Box Container with Fixed Height & Smooth Scrollbar */
 .chat-box-container {
   flex: 1;
-  height: 0; /* Force Flexbox overflow containment */
+  height: 0;
+  /* Force Flexbox overflow containment */
   min-height: 0;
   background: rgba(15, 23, 42, 0.4);
   border-radius: var(--radius-md);
@@ -348,9 +512,19 @@ body {
   color: var(--text-muted);
   gap: 8px;
 
-  .empty-icon { font-size: 40px; }
-  h4 { color: var(--text-main); font-weight: 600; }
-  p { font-size: 13px; max-width: 280px; }
+  .empty-icon {
+    font-size: 40px;
+  }
+
+  h4 {
+    color: var(--text-main);
+    font-weight: 600;
+  }
+
+  p {
+    font-size: 13px;
+    max-width: 280px;
+  }
 }
 
 .chat-bubble-wrapper {
@@ -429,6 +603,7 @@ body {
   &::-webkit-scrollbar {
     height: 4px;
   }
+
   &::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.1);
     border-radius: 2px;
@@ -488,9 +663,20 @@ body {
 }
 
 @keyframes pulseMic {
-  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-  50% { transform: scale(1.03); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
-  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+
+  50% {
+    transform: scale(1.03);
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
 }
 
 .chat-text-field {

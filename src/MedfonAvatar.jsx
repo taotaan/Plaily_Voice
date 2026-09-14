@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import MedfonAvatarCanvas from "./components/Avatar/MedfonAvatarCanvas";
 import AvatarControls, { playAvatarGesture } from "./components/Avatar/AvatarControls";
 import ChatBox from "./components/Chat/ChatBox";
@@ -19,6 +19,13 @@ function MedfonAvatar() {
         }
     ]);
     const [isSending, setIsSending] = useState(false);
+
+    // Central Video Conferencing & Face Tracking states
+    const [isCameraOpen, setIsCameraOpen] = useState(false);
+    const [isFaceTracking, setIsFaceTracking] = useState(false);
+    const [trackerStatus, setTrackerStatus] = useState("");
+    const [currentView, setCurrentView] = useState("head");
+    const videoRef = useRef(null);
 
     const handleAvatarLoaded = (head, morphs = []) => {
         setHeadInstance(head);
@@ -87,13 +94,31 @@ function MedfonAvatar() {
                 <div className="avatar-panel">
                     <div className="panel-card glass-morphism">
                         <div className="panel-header">
-                            <h3>🩺 3D Avatar (ปลายลี่)</h3>
+                            <h3>🎭 3D Avatar (ปลายลี่)</h3>
                             <span className="status-badge online">● พร้อมใช้งาน</span>
                         </div>
 
-                        <MedfonAvatarCanvas onAvatarLoaded={handleAvatarLoaded} />
+                        <MedfonAvatarCanvas
+                            onAvatarLoaded={handleAvatarLoaded}
+                            videoRef={videoRef}
+                            isCameraOpen={isCameraOpen}
+                            isFaceTracking={isFaceTracking}
+                            trackerStatus={trackerStatus}
+                        />
 
-                        <AvatarControls head={headInstance || window.medfonHead} morphKeys={morphKeys} />
+                        <AvatarControls
+                            head={headInstance || window.medfonHead}
+                            morphKeys={morphKeys}
+                            videoRef={videoRef}
+                            isCameraOpen={isCameraOpen}
+                            setIsCameraOpen={setIsCameraOpen}
+                            isFaceTracking={isFaceTracking}
+                            setIsFaceTracking={setIsFaceTracking}
+                            trackerStatus={trackerStatus}
+                            setTrackerStatus={setTrackerStatus}
+                            currentView={currentView}
+                            setCurrentView={setCurrentView}
+                        />
                     </div>
                 </div>
 
@@ -107,7 +132,12 @@ function MedfonAvatar() {
 
                         <ChatBox messages={messages} />
 
-                        <ChatInput onSendMessage={handleSendMessage} isSending={isSending} />
+                        <ChatInput
+                            onSendMessage={handleSendMessage}
+                            isSending={isSending}
+                            isCameraOpen={isCameraOpen}
+                            isFaceTracking={isFaceTracking}
+                        />
                     </div>
                 </div>
             </div>
