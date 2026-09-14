@@ -60,6 +60,9 @@ function AvatarControls({ head, morphKeys = [] }) {
         if (typeof activeHead.setView === "function") {
             activeHead.setView(viewName);
         }
+        if (activeHead.controls) {
+            try { activeHead.controls.update(); } catch (e) { }
+        }
     };
 
     const triggerMorphKey = (key) => {
@@ -95,11 +98,11 @@ function AvatarControls({ head, morphKeys = [] }) {
             }
 
             setTimeout(() => {
-                if (typeof head.setFixedValue === "function") {
-                    head.setFixedValue(key, null);
+                if (typeof activeHead.setFixedValue === "function") {
+                    activeHead.setFixedValue(key, null);
                 }
-                if (head.scene) {
-                    head.scene.traverse((obj) => {
+                if (activeHead.scene) {
+                    activeHead.scene.traverse((obj) => {
                         if (obj.isMesh && obj.morphTargetDictionary && obj.morphTargetInfluences) {
                             let idx = obj.morphTargetDictionary[key];
                             if (idx === undefined) {

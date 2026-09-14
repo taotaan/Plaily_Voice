@@ -19,6 +19,14 @@ function MedfonAvatarCanvas({ onAvatarLoaded, avatarUrl = "/avatars/medfon.glb" 
                 setIsLoading(true);
                 setLoadError(null);
 
+                // Ensure container is clean and previous instance is stopped before creating new engine instance
+                if (headRef.current && typeof headRef.current.stop === "function") {
+                    try { headRef.current.stop(); } catch (e) { }
+                }
+                if (containerRef.current) {
+                    containerRef.current.innerHTML = "";
+                }
+
                 const head = new TalkingHead(
                     containerRef.current,
                     {
@@ -42,6 +50,45 @@ function MedfonAvatarCanvas({ onAvatarLoaded, avatarUrl = "/avatars/medfon.glb" 
                     url: avatarUrl,
                     lipsyncLang: "th"
                 });
+
+                if (!mounted) {
+                    if (typeof head.stop === "function") {
+                        try { head.stop(); } catch (e) { }
+                    }
+                    return;
+                }
+
+                // Synthesize & register viseme_* morph targets for TalkingHead Lip-sync engine
+                if (head.morphs && typeof head.addMixedMorphTarget === "function") {
+                    const visemeMap = {
+                        viseme_aa: { Fcl_MTH_A: 1.0, jawOpen: 0.3 },
+                        viseme_E: { Fcl_MTH_E: 1.0 },
+                        viseme_I: { Fcl_MTH_I: 1.0 },
+                        viseme_O: { Fcl_MTH_O: 1.0, mouthFunnel: 0.5 },
+                        viseme_U: { Fcl_MTH_U: 1.0, mouthPucker: 0.5 },
+                        viseme_PP: { Fcl_MTH_Close: 1.0 },
+                        viseme_FF: { Fcl_MTH_Close: 0.7, Fcl_MTH_Small: 0.4 },
+                        viseme_TH: { Fcl_MTH_A: 0.5, jawOpen: 0.2 },
+                        viseme_DD: { Fcl_MTH_A: 0.5, Fcl_MTH_I: 0.3 },
+                        viseme_kk: { Fcl_MTH_A: 0.6 },
+                        viseme_nn: { Fcl_MTH_I: 0.4 },
+                        viseme_RR: { Fcl_MTH_O: 0.6 },
+                        viseme_CH: { Fcl_MTH_E: 0.7 },
+                        viseme_SS: { Fcl_MTH_I: 0.8 },
+                        viseme_sil: { Fcl_MTH_Neutral: 1.0 }
+                    };
+
+                    for (const [vName, sources] of Object.entries(visemeMap)) {
+                        head.addMixedMorphTarget(head.morphs, vName, sources, true);
+                        if (head.mtAvatar && !head.mtAvatar[vName]) {
+                            head.mtAvatar[vName] = {
+                                fixed: null, realtime: null, system: null, systemd: null, newvalue: null, ref: null,
+                                min: 0, max: 1, easing: head.mtEasingDefault, base: null, v: 0, needsUpdate: true,
+                                acc: (head.mtAccDefault || 0.01) / 1000, maxv: head.mtMaxVDefault || 5
+                            };
+                        }
+                    }
+                }
 
                 // Diagnostic Scan & Dynamic Viseme Mesh Mapping
                 const detectedMorphs = [];
@@ -107,6 +154,10 @@ function MedfonAvatarCanvas({ onAvatarLoaded, avatarUrl = "/avatars/medfon.glb" 
                 } catch {
                     // Ignore cleanup errors
                 }
+            }
+            headRef.current = null;
+            if (containerRef.current) {
+                containerRef.current.innerHTML = "";
             }
         };
     }, [avatarUrl]);

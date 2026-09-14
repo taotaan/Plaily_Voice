@@ -109,10 +109,10 @@ body {
 .panel-card {
   display: flex;
   flex-direction: column;
-  height: 640px;
-  max-height: 640px;
+  min-height: 660px;
+  height: auto;
   padding: 20px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .panel-header {
@@ -149,12 +149,12 @@ body {
   border: 1px solid rgba(56, 189, 248, 0.3);
 }
 
-/* Avatar Canvas Component */
 .avatar-canvas-wrapper {
   position: relative;
   z-index: 1;
   width: 100%;
-  flex: 1;
+  height: 360px;
+  flex-shrink: 0;
   border-radius: var(--radius-md);
   overflow: hidden;
   background: #090d16;
