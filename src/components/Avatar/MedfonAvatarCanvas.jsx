@@ -58,23 +58,23 @@ function MedfonAvatarCanvas({ onAvatarLoaded, avatarUrl = "/avatars/medfon.glb" 
                     return;
                 }
 
-                // Synthesize & register viseme_* morph targets for TalkingHead Lip-sync engine
+                // Synthesize & register viseme_* morph targets for TalkingHead Lip-sync engine (gentle soft mouth weights)
                 if (head.morphs && typeof head.addMixedMorphTarget === "function") {
                     const visemeMap = {
-                        viseme_aa: { Fcl_MTH_A: 1.0, jawOpen: 0.3 },
-                        viseme_E: { Fcl_MTH_E: 1.0 },
-                        viseme_I: { Fcl_MTH_I: 1.0 },
-                        viseme_O: { Fcl_MTH_O: 1.0, mouthFunnel: 0.5 },
-                        viseme_U: { Fcl_MTH_U: 1.0, mouthPucker: 0.5 },
-                        viseme_PP: { Fcl_MTH_Close: 1.0 },
-                        viseme_FF: { Fcl_MTH_Close: 0.7, Fcl_MTH_Small: 0.4 },
-                        viseme_TH: { Fcl_MTH_A: 0.5, jawOpen: 0.2 },
-                        viseme_DD: { Fcl_MTH_A: 0.5, Fcl_MTH_I: 0.3 },
-                        viseme_kk: { Fcl_MTH_A: 0.6 },
-                        viseme_nn: { Fcl_MTH_I: 0.4 },
-                        viseme_RR: { Fcl_MTH_O: 0.6 },
-                        viseme_CH: { Fcl_MTH_E: 0.7 },
-                        viseme_SS: { Fcl_MTH_I: 0.8 },
+                        viseme_aa: { Fcl_MTH_A: 0.5, jawOpen: 0.15 },
+                        viseme_E: { Fcl_MTH_E: 0.45 },
+                        viseme_I: { Fcl_MTH_I: 0.4 },
+                        viseme_O: { Fcl_MTH_O: 0.45, mouthFunnel: 0.2 },
+                        viseme_U: { Fcl_MTH_U: 0.4, mouthPucker: 0.2 },
+                        viseme_PP: { Fcl_MTH_Close: 0.5 },
+                        viseme_FF: { Fcl_MTH_Close: 0.4, Fcl_MTH_Small: 0.2 },
+                        viseme_TH: { Fcl_MTH_A: 0.3, jawOpen: 0.1 },
+                        viseme_DD: { Fcl_MTH_A: 0.3, Fcl_MTH_I: 0.2 },
+                        viseme_kk: { Fcl_MTH_A: 0.35 },
+                        viseme_nn: { Fcl_MTH_I: 0.25 },
+                        viseme_RR: { Fcl_MTH_O: 0.35 },
+                        viseme_CH: { Fcl_MTH_E: 0.35 },
+                        viseme_SS: { Fcl_MTH_I: 0.4 },
                         viseme_sil: { Fcl_MTH_Neutral: 1.0 }
                     };
 

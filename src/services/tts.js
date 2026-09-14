@@ -191,6 +191,7 @@ export function startThaiMouthAnimation(head, durationMs, text = "") {
     }));
 
     const startTime = performance.now();
+    const currentValues = {};
 
     const animate = (now) => {
         const elapsed = now - startTime;
@@ -202,29 +203,33 @@ export function startThaiMouthAnimation(head, durationMs, text = "") {
 
         const active = visemes.find((item) => elapsed >= item.start && elapsed < item.start + item.duration);
 
-        // Smooth natural speech mouth opening progress (0.0 -> 0.65)
+        // Smooth natural speech mouth opening progress with smooth LERP
         const activeProgress = active
-            ? Math.min(0.7, Math.sin(((elapsed - active.start) / Math.max(1, active.duration)) * Math.PI) * 0.85)
-            : 0.1 + Math.abs(Math.sin(elapsed / 120)) * 0.3;
+            ? Math.min(0.4, Math.sin(((elapsed - active.start) / Math.max(1, active.duration)) * Math.PI) * 0.45)
+            : 0.05;
 
         const activeKey = active?.key || "Fcl_MTH_A";
         const activeVisemeKey = active?.visemeKey || "viseme_aa";
         const activeKeys = new Set([activeKey, activeVisemeKey].filter(Boolean));
 
         availableKeys.forEach((key) => {
-            const value = activeKeys.has(key)
+            const targetValue = activeKeys.has(key)
                 ? activeProgress
                 : key === "jawOpen" || key === "mouthOpen"
-                    ? activeProgress * 0.45
+                    ? activeProgress * 0.3
                     : 0;
 
-            const morph = h.mtAvatar ? h.mtAvatar[key] : null;
-            if (morph) {
-                morph.fixed = null;
-                morph.realtime = value;
-                morph.needsUpdate = true;
+            // Smooth LERP (linear interpolation) to prevent rapid jittery snapping
+            const prev = currentValues[key] || 0;
+            const smoothedValue = prev + (targetValue - prev) * 0.12;
+            currentValues[key] = smoothedValue;
+
+            if (typeof h.setValue === "function") {
+                h.setValue(key, smoothedValue > 0.01 ? smoothedValue : 0);
+            } else if (typeof h.setFixedValue === "function") {
+                h.setFixedValue(key, smoothedValue > 0.01 ? smoothedValue : null);
             }
-            setSceneMorphValue(h, key, value);
+            setSceneMorphValue(h, key, smoothedValue);
         });
 
         window.currentMedfonAnimationFrame = requestAnimationFrame(animate);
@@ -340,9 +345,6 @@ async function playCleanAudio(head, audioSrc, fullText, onTextUpdate) {
                 { lipsyncLang: "th" }
             );
             addLog("AVATAR", "TalkingHead รับ audio และ viseme เรียบร้อยแล้ว");
-
-            // Trigger Natural Thai Mouth animation loop
-            startThaiMouthAnimation(h, durationMs, fullText);
 
         } else {
             throw new Error("TalkingHead.speakAudio is unavailable");
