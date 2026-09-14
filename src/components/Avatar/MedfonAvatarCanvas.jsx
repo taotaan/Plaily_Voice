@@ -33,10 +33,8 @@ function MedfonAvatarCanvas({
         }
     }, [isCameraOpen, isFaceTracking, videoRef]);
 
-
     useEffect(() => {
         let mounted = true;
-
 
         async function initAvatar() {
             if (!containerRef.current) return;
@@ -59,9 +57,22 @@ function MedfonAvatarCanvas({
                         ttsEndpoint: null,
                         cameraView: "head",
                         cameraDistance: -0.6,
+                        cameraRotateEnable: true,
+                        cameraPanEnable: true,
+                        cameraZoomEnable: true,
                         lipsyncModules: []
                     }
                 );
+
+                // Enable full interactive camera controls (Mouse scroll zoom, left drag rotate, right drag pan)
+                if (head.controls) {
+                    head.controls.enabled = true;
+                    head.controls.enableZoom = true;
+                    head.controls.enableRotate = true;
+                    head.controls.enablePan = true;
+                    head.controls.minDistance = 0.2;
+                    head.controls.maxDistance = 6.0;
+                }
 
                 // Register Thai Lipsync Processor directly into TalkingHead Engine (No dynamic fetch 404)
                 if (!head.lipsync) head.lipsync = {};
@@ -89,7 +100,7 @@ function MedfonAvatarCanvas({
                     return;
                 }
 
-                // Synthesize & register viseme_* morph targets for TalkingHead Lip-sync engine (gentle soft mouth weights)
+                // Synthesize & register viseme_* morph targets for TalkingHead Lip-sync engine
                 if (head.morphs && typeof head.addMixedMorphTarget === "function") {
                     const visemeMap = {
                         viseme_aa: { Fcl_MTH_A: 0.5, jawOpen: 0.15 },
@@ -148,18 +159,6 @@ function MedfonAvatarCanvas({
                 }
 
                 const uniqueMorphs = Array.from(new Set(detectedMorphs));
-                console.log("3D Model Meshes Detected:", detectedMeshes);
-                console.log("3D Model Morph Targets Detected:", detectedMorphs.length, "Unique:", uniqueMorphs.length);
-                console.log("Sample Morph Targets:", uniqueMorphs.slice(0, 50));
-                console.log("Mapped Face Meshes for Visemes:", faceMeshNames);
-
-                if (detectedMorphs.length === 0) {
-                    console.warn("⚠️ WARNING: No morph targets (BlendShapes) found in this 3D GLB model!");
-                    addLog("AVATAR", "⚠️ เตือน: ไม่พบ Morph Targets (BlendShapes) สำหรับขยับใบหน้า/ปากในโมเดล 3D นี้");
-                } else {
-                    addLog("AVATAR", `พบ ${detectedMeshes.length} Meshes และ ${uniqueMorphs.length} Morph Targets ในโมเดล 3D (${faceMeshNames.length} Face meshes)`);
-                }
-
                 if (mounted) {
                     setIsLoading(false);
                     if (onAvatarLoaded) {
@@ -193,11 +192,59 @@ function MedfonAvatarCanvas({
         };
     }, [avatarUrl]);
 
+    const setCameraView = (viewName) => {
+        if (!headRef.current) return;
+        if (typeof headRef.current.setView === "function") {
+            headRef.current.setView(viewName);
+        }
+        if (headRef.current.controls) {
+            try { headRef.current.controls.update(); } catch (e) { }
+        }
+    };
+
+    const zoomIn = () => {
+        if (!headRef.current || !headRef.current.controls) return;
+        try {
+            headRef.current.controls.dollyIn(1.2);
+            headRef.current.controls.update();
+        } catch (e) { }
+    };
+
+    const zoomOut = () => {
+        if (!headRef.current || !headRef.current.controls) return;
+        try {
+            headRef.current.controls.dollyOut(1.2);
+            headRef.current.controls.update();
+        } catch (e) { }
+    };
+
     return (
         <div className="avatar-canvas-wrapper">
             <div ref={containerRef} className="avatar-canvas-container" />
 
-            {/* Picture-in-Picture User WebCam preview box (TalkingHead Video Conferencing Style) */}
+            {/* Floating Zoom & Camera Angle Overlay Controls */}
+            <div className="canvas-overlay-controls">
+                <button className="zoom-btn" onClick={() => setCameraView("head")} title="มุมมองใบหน้า">
+                    ใบหน้า
+                </button>
+                <button className="zoom-btn" onClick={() => setCameraView("upper")} title="มุมมองครึ่งตัว">
+                    ครึ่งตัว
+                </button>
+                <button className="zoom-btn" onClick={() => setCameraView("full")} title="มุมมองเต็มตัว">
+                    เต็มตัว
+                </button>
+                <button className="zoom-btn icon-only" onClick={zoomIn} title="ซูมเข้า">
+                    +
+                </button>
+                <button className="zoom-btn icon-only" onClick={zoomOut} title="ซูมออก">
+                    -
+                </button>
+                <button className="zoom-btn icon-only" onClick={() => setCameraView("head")} title="รีเซ็ตมุมมอง">
+                    รีเซ็ต
+                </button>
+            </div>
+
+            {/* Picture-in-Picture User WebCam preview box */}
             <div className={`canvas-camera-box ${isCameraOpen || isFaceTracking ? "active" : ""}`}>
                 <video
                     ref={videoRef}
@@ -207,9 +254,10 @@ function MedfonAvatarCanvas({
                     muted
                 />
                 <div className="canvas-camera-badge">
-                    <span className="live-dot">●</span> LIVE (คุณ)
+                    <span className="live-dot">●</span> กล้องผู้ใช้
                 </div>
             </div>
+
 
             {isLoading && (
                 <div className="avatar-loading-overlay">
@@ -228,4 +276,5 @@ function MedfonAvatarCanvas({
 }
 
 export default MedfonAvatarCanvas;
+
 

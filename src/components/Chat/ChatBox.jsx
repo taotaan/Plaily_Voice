@@ -12,8 +12,7 @@ function ChatBox({ messages = [] }) {
             <div className="chat-messages-list">
                 {messages.length === 0 ? (
                     <div className="chat-empty-state">
-                        <div className="empty-icon">🩺</div>
-                        <h4>ยินดีต้อนรับสู่ ปลายลี่ AI</h4>
+                        <h4>ยินดีต้อนรับสู่ระบบผู้ช่วยเสมือน ปลายลี่</h4>
                         <p>พิมพ์ข้อความสนทนาเพื่อเริ่มต้นพูดคุยกับปลายลี่</p>
                     </div>
                 ) : (
@@ -23,7 +22,7 @@ function ChatBox({ messages = [] }) {
                             className={`chat-bubble-wrapper ${msg.sender === "user" ? "user-side" : "bot-side"}`}
                         >
                             <div className="avatar-badge">
-                                {msg.sender === "user" ? "👤" : "🌸"}
+                                {msg.sender === "user" ? "คุณ" : "PL"}
                             </div>
                             <div className="chat-bubble">
                                 <div className="sender-name">
@@ -42,3 +41,4 @@ function ChatBox({ messages = [] }) {
 }
 
 export default ChatBox;
+

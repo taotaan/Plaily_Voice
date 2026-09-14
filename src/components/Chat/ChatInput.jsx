@@ -93,24 +93,35 @@ function ChatInput({ onSendMessage, isSending = false, isCameraOpen = false, isF
         };
     }, [onSendMessage]);
 
+    const prevAutoModeRef = useRef(isAutoModeActive);
+
     // Handle trigger or stop recognition based on mode or AI sending state
     useEffect(() => {
         if (!recognitionRef.current) return;
 
-        if (isAutoModeActive && !isSending) {
+        // When camera / hands-free mode turns OFF, stop microphone immediately
+        if (prevAutoModeRef.current && !isAutoModeActive) {
+            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+            if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current);
+            try {
+                recognitionRef.current.stop();
+            } catch (e) { }
+            addLog("STT", "⏹️ ปิดไมโครโฟนเรียบร้อยเนื่องจากปิดกล้องแล้ว");
+        } else if (isAutoModeActive && !isSending) {
             if (!isListening) {
                 try {
                     recognitionRef.current.start();
                 } catch (e) { }
             }
-        } else if (isSending) {
-            if (isListening) {
-                try {
-                    recognitionRef.current.stop();
-                } catch (e) { }
-            }
+        } else if (isSending && isListening) {
+            try {
+                recognitionRef.current.stop();
+            } catch (e) { }
         }
+
+        prevAutoModeRef.current = isAutoModeActive;
     }, [isAutoModeActive, isSending, isListening]);
+
 
     const toggleListening = () => {
         if (!recognitionRef.current) {
@@ -149,17 +160,17 @@ function ChatInput({ onSendMessage, isSending = false, isCameraOpen = false, isF
         <div className="chat-input-wrapper">
             <div className="quick-chips-container">
                 {(isCameraOpen || isFaceTracking) ? (
-                    <div className="quick-chip-btn active-chip" title="เมื่อเปิดกล้องอยู่ คุณสามารถพูดคุยโต้ตอบได้ทันทีแบบไม่ต้องกดปุ่ม">
-                        🎥 โหมดเปิดกล้องคุยสด (พูดคุย Hands-Free อัตโนมัติ)
+                    <div className="quick-chip-btn active-chip" title="ระบบเปิดกล้องโต้ตอบเสียงอัตโนมัติ">
+                        โหมดเปิดกล้องโต้ตอบเสียงอัตโนมัติ
                     </div>
                 ) : (
                     <button
                         type="button"
                         className={`quick-chip-btn ${isHandsFree ? "active-chip" : ""}`}
                         onClick={toggleHandsFree}
-                        title="เมื่อพูดจบและหยุดพูด 1.2 วินาที ระบบจะส่งคำถามไปหา AI โดยอัตโนมัติ"
+                        title="เมื่อหยุดพูด ระบบจะส่งข้อความไปประมวลผลอัตโนมัติ"
                     >
-                        {isHandsFree ? "🤖 โหมดโต้ตอบเสียงอัตโนมัติ (เปิดอยู่)" : "⚡ โหมดโต้ตอบเสียงอัตโนมัติ (Hands-Free)"}
+                        {isHandsFree ? "โหมดโต้ตอบเสียงอัตโนมัติ (เปิดอยู่)" : "โหมดโต้ตอบเสียงอัตโนมัติ"}
                     </button>
                 )}
             </div>
@@ -169,23 +180,23 @@ function ChatInput({ onSendMessage, isSending = false, isCameraOpen = false, isF
                     type="button"
                     className={`stt-mic-btn ${isListening ? "listening-active" : ""}`}
                     onClick={toggleListening}
-                    title={isListening ? "กำลังฟังเสียงพูดของคุณ..." : "กดเพื่อพูดผ่านไมโครโฟน"}
+                    title={isListening ? "กำลังบันทึกเสียงพูดของคุณ..." : "กดเพื่อบันทึกเสียง"}
                     disabled={isSending}
                 >
-                    {isListening ? "🔴 กำลังฟัง..." : "🎤 อัดเสียง"}
+                    {isListening ? "กำลังฟังเสียง..." : "บันทึกเสียง"}
                 </button>
 
                 <input
                     type="text"
                     className="chat-text-field"
-                    placeholder={isListening ? (isAutoModeActive ? "พูดข้อความเลย ระบบจะส่งให้อัตโนมัติเมื่อหยุดพูด..." : "กำลังฟังเสียงพูดของคุณ...") : "พิมพ์ข้อความ หรือเปิดกล้อง/ไมโครโฟนพูดคุย..."}
+                    placeholder={isListening ? (isAutoModeActive ? "พูดข้อความ ระบบจะส่งให้อัตโนมัติเมื่อหยุดพูด..." : "กำลังบันทึกเสียงพูดของคุณ...") : "พิมพ์ข้อความ หรือใช้การพูด..."}
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     disabled={isSending}
                 />
 
                 <button type="submit" className="chat-send-btn" disabled={!text.trim() || isSending}>
-                    {isSending ? "กำลังส่ง..." : "ส่งข้อความ 🚀"}
+                    {isSending ? "กำลังส่ง..." : "ส่งข้อความ"}
                 </button>
             </form>
         </div>
@@ -193,4 +204,5 @@ function ChatInput({ onSendMessage, isSending = false, isCameraOpen = false, isF
 }
 
 export default ChatInput;
+
 

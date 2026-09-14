@@ -51,46 +51,22 @@ export function playAvatarGesture(head, gestureName = "nod", mood = "happy") {
 
 function AvatarControls({
     head,
-    morphKeys = [],
     videoRef,
     isCameraOpen,
     setIsCameraOpen,
     isFaceTracking,
     setIsFaceTracking,
     trackerStatus,
-    setTrackerStatus,
-    currentView,
-    setCurrentView
+    setTrackerStatus
 }) {
-    const [activeTab, setActiveTab] = useState("camera");
+    const toggleCameraAndTracking = async () => {
+        const isActive = isCameraOpen || isFaceTracking;
 
-    const toggleWebcam = async () => {
-        if (isCameraOpen) {
-            if (!isFaceTracking) {
-                stopFaceTracker();
-            }
-            if (setIsCameraOpen) setIsCameraOpen(false);
-            if (setTrackerStatus) setTrackerStatus("");
-        } else {
-            try {
-                if (setTrackerStatus) setTrackerStatus("กำลังขอสิทธิ์เปิดกล้อง...");
-                const targetVid = videoRef ? videoRef.current : null;
-                await openWebcamStream(targetVid);
-                if (setIsCameraOpen) setIsCameraOpen(true);
-                if (setTrackerStatus) setTrackerStatus("🎥 เปิดกล้องคุยสดเรียบร้อย (พูดคุยโต้ตอบได้ทันที)");
-            } catch (err) {
-                console.error("Webcam open error:", err);
-                if (setTrackerStatus) setTrackerStatus(`⚠️ ${err.message || "ไม่สามารถเปิดกล้องได้"}`);
-                if (setIsCameraOpen) setIsCameraOpen(false);
-            }
-        }
-    };
-
-    const toggleFaceTracking = async () => {
-        if (isFaceTracking) {
+        if (isActive) {
             stopFaceTracker();
+            if (setIsCameraOpen) setIsCameraOpen(false);
             if (setIsFaceTracking) setIsFaceTracking(false);
-            if (setTrackerStatus) setTrackerStatus(isCameraOpen ? "🎥 เปิดกล้องคุยสด" : "");
+            if (setTrackerStatus) setTrackerStatus("");
             const activeHead = getActiveHead(head);
             if (activeHead && typeof activeHead.setValue === "function") {
                 activeHead.setValue("headRotateY", 0);
@@ -98,8 +74,9 @@ function AvatarControls({
             }
         } else {
             try {
-                if (setTrackerStatus) setTrackerStatus("กำลังเตรียมระบบสบตา...");
+                if (setTrackerStatus) setTrackerStatus("กำลังเปิดกล้องและระบบสบตา...");
                 const targetVid = videoRef ? videoRef.current : null;
+
                 await startFaceTracker(targetVid, ({ yaw, pitch, detected }) => {
                     const activeHead = getActiveHead(head);
                     if (activeHead) {
@@ -108,21 +85,23 @@ function AvatarControls({
                                 activeHead.setValue("headRotateY", yaw * 0.4);
                                 activeHead.setValue("headRotateX", pitch * 0.3);
                             }
-                            if (setTrackerStatus) setTrackerStatus("👁️ กำลังสบตากับคุณ");
+                            if (setTrackerStatus) setTrackerStatus("เปิดกล้องคุยสดและกำลังสบตากับคุณ");
                         } else {
                             if (typeof activeHead.setValue === "function") {
                                 activeHead.setValue("headRotateY", 0);
                                 activeHead.setValue("headRotateX", 0);
                             }
-                            if (setTrackerStatus) setTrackerStatus("🔍 กำลังมองหาใบหน้า...");
+                            if (setTrackerStatus) setTrackerStatus("กำลังตรวจจับใบหน้า...");
                         }
                     }
                 });
-                if (setIsFaceTracking) setIsFaceTracking(true);
+
                 if (setIsCameraOpen) setIsCameraOpen(true);
+                if (setIsFaceTracking) setIsFaceTracking(true);
             } catch (err) {
-                console.error("Face tracker error:", err);
-                if (setTrackerStatus) setTrackerStatus(`⚠️ ${err.message || "ไม่สามารถเปิดระบบสบตาได้"}`);
+                console.error("Camera & Face tracker error:", err);
+                if (setTrackerStatus) setTrackerStatus(`ไม่สามารถเปิดกล้องได้: ${err.message || ""}`);
+                if (setIsCameraOpen) setIsCameraOpen(false);
                 if (setIsFaceTracking) setIsFaceTracking(false);
             }
         }
@@ -134,209 +113,39 @@ function AvatarControls({
         };
     }, []);
 
-
-    const setCameraView = (viewName) => {
-        const activeHead = getActiveHead(head);
-        if (!activeHead) return;
-        if (activeHead.audioCtx && activeHead.audioCtx.state === "suspended") {
-            try { activeHead.audioCtx.resume(); } catch (e) { }
-        }
-        if (typeof activeHead.setView === "function") {
-            activeHead.setView(viewName);
-        }
-        if (activeHead.controls) {
-            try { activeHead.controls.update(); } catch (e) { }
-        }
-    };
-
-    const triggerMorphKey = (key) => {
-        const activeHead = getActiveHead(head);
-        if (!activeHead) return;
-        try {
-            if (activeHead.audioCtx && activeHead.audioCtx.state === "suspended") {
-                try { activeHead.audioCtx.resume(); } catch (e) { }
-            }
-
-            if (typeof activeHead.setFixedValue === "function") {
-                activeHead.setFixedValue(key, 1.0);
-            }
-
-            const lowerKey = key.toLowerCase();
-            if (activeHead.scene) {
-                activeHead.scene.traverse((obj) => {
-                    if (obj.isMesh && obj.morphTargetDictionary && obj.morphTargetInfluences) {
-                        let idx = obj.morphTargetDictionary[key];
-                        if (idx === undefined) {
-                            for (const [mName, mIdx] of Object.entries(obj.morphTargetDictionary)) {
-                                if (mName.toLowerCase() === lowerKey) {
-                                    idx = mIdx;
-                                    break;
-                                }
-                            }
-                        }
-                        if (idx !== undefined) {
-                            obj.morphTargetInfluences[idx] = 1.0;
-                        }
-                    }
-                });
-            }
-
-            setTimeout(() => {
-                if (typeof activeHead.setFixedValue === "function") {
-                    activeHead.setFixedValue(key, null);
-                }
-                if (activeHead.scene) {
-                    activeHead.scene.traverse((obj) => {
-                        if (obj.isMesh && obj.morphTargetDictionary && obj.morphTargetInfluences) {
-                            let idx = obj.morphTargetDictionary[key];
-                            if (idx === undefined) {
-                                for (const [mName, mIdx] of Object.entries(obj.morphTargetDictionary)) {
-                                    if (mName.toLowerCase() === lowerKey) {
-                                        idx = mIdx;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (idx !== undefined) {
-                                obj.morphTargetInfluences[idx] = 0;
-                            }
-                        }
-                    });
-                }
-            }, 2000);
-        } catch (e) {
-            console.error("Morph test failed:", e);
-        }
-    };
-
-    const mouthRelatedKeys = morphKeys.filter((k) => {
-        const lk = k.toLowerCase();
-        return (
-            lk.includes("mouth") ||
-            lk.includes("jaw") ||
-            lk.includes("mth") ||
-            lk.includes("viseme") ||
-            lk.includes("v_") ||
-            lk.includes("lip") ||
-            lk.includes("smile")
-        );
-    });
-
-    const displayMouthKeys =
-        mouthRelatedKeys.length > 0
-            ? mouthRelatedKeys.slice(0, 16)
-            : ["jawOpen", "mouthSmileLeft", "mouthSmileRight", "Fcl_MTH_A", "Fcl_MTH_I", "Fcl_MTH_O", "Fcl_MTH_Large"];
+    const isLive = isCameraOpen || isFaceTracking;
 
     return (
-        <div className="avatar-controls-card">
-            <div className="controls-tab-header">
+        <div className="avatar-controls-toolbar">
+            <div className="btn-group main-controls">
                 <button
-                    className={`tab-btn ${activeTab === "camera" ? "active" : ""}`}
-                    onClick={() => setActiveTab("camera")}
+                    className={`ctrl-btn ${isLive ? "pink" : "green"}`}
+                    onClick={toggleCameraAndTracking}
                 >
-                    🎥 มุมกล้อง & ท่าทาง
+                    {isLive ? "ปิดกล้องคุยสด" : "เปิดกล้องคุยสดและสบตา"}
                 </button>
-                <button
-                    className={`tab-btn ${activeTab === "mouth" ? "active" : ""}`}
-                    onClick={() => setActiveTab("mouth")}
-                >
-                    👄 ทดสอบรูปปาก ({displayMouthKeys.length})
+                <button className="ctrl-btn green" onClick={() => playAvatarGesture(head, "wave")}>
+                    ทักทาย (โบกมือ)
                 </button>
-                <button
-                    className={`tab-btn ${activeTab === "all" ? "active" : ""}`}
-                    onClick={() => setActiveTab("all")}
-                >
-                    🧬 Morph Keys ({morphKeys.length})
+                <button className="ctrl-btn orange" onClick={() => playAvatarGesture(head, "think")}>
+                    แสดงความคิด
+                </button>
+                <button className="ctrl-btn pink" onClick={() => playAvatarGesture(head, "welcome")}>
+                    แสดงความเคารพ
                 </button>
             </div>
 
-            <div className="controls-tab-body">
-                {activeTab === "camera" && (
-                    <div className="btn-group">
-                        <button
-                            className={`ctrl-btn ${isCameraOpen ? "pink" : "green"}`}
-                            onClick={toggleWebcam}
-                        >
-                            {isCameraOpen ? "🎥 ⏹️ ปิดกล้อง" : "🎥 เปิดกล้องคุยสด"}
-                        </button>
-                        <button
-                            className={`ctrl-btn ${isFaceTracking ? "orange" : "teal"}`}
-                            onClick={toggleFaceTracking}
-                        >
-                            {isFaceTracking ? "👁️ ⏹️ ปิดสบตา" : "📷 สบตา (Face Tracking)"}
-                        </button>
-                        <button className="ctrl-btn teal" onClick={() => setCameraView("head")}>
-                            🔍 ใบหน้า (Head)
-                        </button>
-                        <button className="ctrl-btn teal" onClick={() => setCameraView("upper")}>
-                            🔍 ครึ่งตัว (Upper)
-                        </button>
-                        <button className="ctrl-btn teal" onClick={() => setCameraView("full")}>
-                            🔍 เต็มตัว (Full)
-                        </button>
-                        <button className="ctrl-btn green" onClick={() => playAvatarGesture(head, "wave")}>
-                            👋 โบกมือ
-                        </button>
-                        <button className="ctrl-btn orange" onClick={() => playAvatarGesture(head, "think")}>
-                            🤔 ครุ่นคิด
-                        </button>
-                        <button className="ctrl-btn pink" onClick={() => playAvatarGesture(head, "welcome")}>
-                            🙏 ทักทาย
-                        </button>
-                    </div>
-                )}
-
-
-                <div
-                    className="webcam-dedicated-card"
-                    style={{ display: isFaceTracking ? "flex" : "none" }}
-                >
-                    <div className="webcam-info-side">
-                        <div className="webcam-status-header">
-                            <span className="status-live-dot">●</span>
-                            <span className="webcam-status-title">ระบบสบตาผู้ใช้ (Eye Contact Face Tracking)</span>
-                        </div>
-                        <p className="webcam-status-desc">{trackerStatus || "กำลังตรวจจับใบหน้า..."}</p>
-                        <button className="webcam-close-btn" onClick={toggleFaceTracking}>
-                            ⏹️ ปิดระบบสบตา
-                        </button>
-                    </div>
+            {isLive && (
+                <div className="webcam-status-bar">
+                    <span className="status-live-dot">●</span>
+                    <span>{trackerStatus || "เปิดกล้องคุยสดและสบตาอยู่"}</span>
                 </div>
-
-
-                {activeTab === "mouth" && (
-                    <div className="btn-group">
-                        {displayMouthKeys.map((k) => (
-                            <button
-                                key={k}
-                                className="ctrl-btn pink"
-                                onClick={() => triggerMorphKey(k)}
-                            >
-                                {k}
-                            </button>
-                        ))}
-                    </div>
-                )}
-
-                {activeTab === "all" && (
-                    <div className="morph-keys-scroll shadow-inner">
-                        {morphKeys.map((key) => (
-                            <button
-                                key={key}
-                                className={`morph-chip ${key.startsWith("viseme") || key.includes("mouth") || key.includes("MTH") || key.includes("jaw")
-                                    ? "highlight"
-                                    : ""
-                                    }`}
-                                onClick={() => triggerMorphKey(key)}
-                            >
-                                {key}
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </div>
+            )}
         </div>
     );
 }
 
 export default AvatarControls;
+
+
+

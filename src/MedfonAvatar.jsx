@@ -14,10 +14,11 @@ function MedfonAvatar() {
         {
             id: 1,
             sender: "bot",
-            text: "สวัสดีครับ คุณ! ผมคือ ปลายลี่ ผู้ช่วยเสมือนภาษาไทย ยินดีที่ได้พบครับ มีเรื่องอะไรให้ปลายลี่ดูแลช่วยเหลือวันนี้ไหมครับ?",
+            text: "สวัสดีค่ะ ดิฉันปลายลี่ ยินดีที่ได้พบนะคะ มีเรื่องอะไรให้ช่วยเหลือวันนี้ไหมคะ?",
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         }
     ]);
+
     const [isSending, setIsSending] = useState(false);
 
     // Central Video Conferencing & Face Tracking states
@@ -34,7 +35,7 @@ function MedfonAvatar() {
             keys = Object.keys(head.mtAvatar);
         }
         setMorphKeys(keys);
-        addLog("AVATAR", `3D Avatar Engine (TalkingHead) โหลดสำเร็จ (พบ ${keys.length} Morph Keys)`);
+        addLog("AVATAR", `3D Avatar Engine โหลดสำเร็จ`);
     };
 
     const handleSendMessage = async (userText) => {
@@ -53,7 +54,7 @@ function MedfonAvatar() {
         try {
             // Stage 2: Fetch LLM response
             const apiRes = await sendChatMessage(userText);
-            const botReplyText = apiRes.reply || "ขออภัยครับ ปลายลี่ไม่สามารถดึงข้อมูลได้ในขณะนี้";
+            const botReplyText = apiRes.reply || "ขออภัยค่ะ ไม่สามารถดึงข้อมูลได้ในขณะนี้";
             const botGesture = apiRes.gesture || "nod";
             const botMood = apiRes.mood || "happy";
 
@@ -63,7 +64,7 @@ function MedfonAvatar() {
             const botMsgObj = {
                 id: botMsgId,
                 sender: "bot",
-                text: "", // Starts empty, fills word-by-word with speech sound
+                text: "",
                 time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
             };
 
@@ -94,7 +95,7 @@ function MedfonAvatar() {
                 <div className="avatar-panel">
                     <div className="panel-card glass-morphism">
                         <div className="panel-header">
-                            <h3>🎭 3D Avatar (ปลายลี่)</h3>
+                            <h3>ระบบแสดงผลผู้ช่วยเสมือน 3D (ปลายลี่)</h3>
                             <span className="status-badge online">● พร้อมใช้งาน</span>
                         </div>
 
@@ -126,9 +127,10 @@ function MedfonAvatar() {
                 <div className="chat-panel">
                     <div className="panel-card glass-morphism">
                         <div className="panel-header">
-                            <h3>💬 สนทนากับ ปลายลี่ AI</h3>
-                            <span className="info-badge">ตอบพิมพ์ตามเสียง & Lip-sync</span>
+                            <h3>ระบบสนทนาผู้ช่วยเสมือน (ปลายลี่)</h3>
+                            <span className="info-badge">ตอบสนองเรียลไทม์</span>
                         </div>
+
 
                         <ChatBox messages={messages} />
 
