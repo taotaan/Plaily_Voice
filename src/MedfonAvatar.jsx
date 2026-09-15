@@ -128,7 +128,6 @@ function MedfonAvatar() {
                     <div className="panel-card glass-morphism">
                         <div className="panel-header">
                             <h3>ระบบสนทนาผู้ช่วยเสมือน (ปลายลี่)</h3>
-                            <span className="info-badge">ตอบสนองเรียลไทม์</span>
                         </div>
 
 

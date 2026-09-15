@@ -7,7 +7,7 @@ function App() {
                 <div className="header-brand">
                     <div className="brand-logo">PL</div>
                     <div className="brand-text">
-                        <h1>Plailie Virtual Assistant</h1>
+                        <h1>Plaily</h1>
                         <span className="brand-tagline">ระบบผู้ช่วยเสมือนตอบสนองด้วยเสียงและโมเดล 3 มิติ (ปลายลี่)</span>
                     </div>
                 </div>

@@ -390,7 +390,9 @@ function speakWithWebSpeechFallback(head, text, lang = "th-TH", onTextUpdate = n
     utterance.pitch = 1.2;
 
     const voices = synthVoices.length > 0 ? synthVoices : window.speechSynthesis.getVoices();
-    const thaiVoice = voices.find((v) => v.lang && (v.lang.includes("th") || v.lang.includes("TH")));
+    const thaiVoice =
+        voices.find((v) => v.lang && (v.lang.includes("th") || v.lang.includes("TH")) && (v.name.includes("Premwadee") || v.name.includes("Kanya") || v.name.toLowerCase().includes("female"))) ||
+        voices.find((v) => v.lang && (v.lang.includes("th") || v.lang.includes("TH")));
     if (thaiVoice) {
         utterance.voice = thaiVoice;
     }
