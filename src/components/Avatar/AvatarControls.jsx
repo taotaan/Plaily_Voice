@@ -77,15 +77,33 @@ function AvatarControls({
                 if (setTrackerStatus) setTrackerStatus("กำลังเปิดกล้องและระบบสบตา...");
                 const targetVid = videoRef ? videoRef.current : null;
 
-                await startFaceTracker(targetVid, ({ yaw, pitch, detected }) => {
+                let lastWaveTime = 0;
+
+                await startFaceTracker(targetVid, ({ yaw, pitch, detected, isSmiling, isWaving }) => {
                     const activeHead = getActiveHead(head);
                     if (activeHead) {
                         if (detected) {
                             if (typeof activeHead.setValue === "function") {
-                                activeHead.setValue("headRotateY", yaw * 0.4);
-                                activeHead.setValue("headRotateX", pitch * 0.3);
+                                activeHead.setValue("headRotateY", yaw * 0.85);
+                                activeHead.setValue("headRotateX", pitch * 0.65);
                             }
-                            if (setTrackerStatus) setTrackerStatus("เปิดกล้องคุยสดและกำลังสบตากับคุณ");
+
+                            if (isSmiling && typeof activeHead.setMood === "function") {
+                                activeHead.setMood("happy");
+                            }
+
+                            if (isWaving) {
+                                const now = Date.now();
+                                if (now - lastWaveTime > 3500) {
+                                    lastWaveTime = now;
+                                    playAvatarGesture(activeHead, "wave", "happy");
+                                    if (setTrackerStatus) setTrackerStatus("👋 ปลายลี่เห็นคุณโบกมือ จึงโบกมือทักทายตอบกลับ!");
+                                }
+                            } else if (isSmiling) {
+                                if (setTrackerStatus) setTrackerStatus("😊 คุณกำลังยิ้ม ปลายลี่จึงยิ้มตอบกลับ!");
+                            } else {
+                                if (setTrackerStatus) setTrackerStatus("เปิดกล้องคุยสดและกำลังสบตากับคุณ");
+                            }
                         } else {
                             if (typeof activeHead.setValue === "function") {
                                 activeHead.setValue("headRotateY", 0);
